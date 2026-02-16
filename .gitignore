@@ -1,0 +1,5 @@
+.music_config
+.music_metadata_cache
+cache/
+music_player
+*.o
