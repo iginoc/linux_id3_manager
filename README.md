@@ -28,7 +28,7 @@ Ensure you have the following installed on your Linux system:
 ```bash
 sudo apt update
 sudo apt install build-essential libgtkmm-3.0-dev libgstreamer1.0-dev \
-libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-good \
+libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-good libsqlite3-dev \
 gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly smbclient curl \
 python3-pip
 
@@ -41,7 +41,7 @@ You can compile the application using `g++`:
 
 ```bash
 g++ -std=c++17 music_player_setup.cpp -o music_player \
-    $(pkg-config --cflags --libs gtkmm-3.0 gstreamer-1.0 gstreamer-tag-1.0)
+    $(pkg-config --cflags --libs gtkmm-3.0 gstreamer-1.0 gstreamer-tag-1.0) -lsqlite3
 ```
 
 ## Usage
