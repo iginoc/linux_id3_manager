@@ -1,4 +1,5 @@
 #include <gtkmm.h>
+#include <gio/gio.h>
 #include <cstdio>
 #include <fstream>
 #include <string>
@@ -129,7 +130,7 @@ std::pair<bool, std::string> exec_smb_command(const std::string& path, const Sam
                   escaped_username + "%" + escaped_password + "\" -c \"" + escaped_cmd + "\" 2>&1";
     }
     
-    LOG(DEBUG, "Executing command: " << command);
+    // LOG(DEBUG, "Executing command: " << command);
 
     std::array<char, 128> buffer;
     std::string result;
@@ -194,6 +195,48 @@ bool download_smb_file(const std::string& full_path, const std::string& local_pa
     }
     
     return success;
+}
+
+bool download_smb_to_memory(const std::string& full_path, std::vector<char>& data, const SambaConfig& config) {
+    std::string service = full_path;
+    std::string directory = "";
+
+    if (full_path.length() > 2 && full_path.substr(0, 2) == "//") {
+        size_t first_slash = full_path.find('/', 2);
+        if (first_slash != std::string::npos) {
+            size_t second_slash = full_path.find('/', first_slash + 1);
+            if (second_slash != std::string::npos) {
+                service = full_path.substr(0, second_slash);
+                directory = full_path.substr(second_slash + 1);
+            }
+        }
+    }
+
+    std::string filename = full_path.substr(full_path.find_last_of('/') + 1);
+    
+    std::string escaped_directory = escape_for_double_quotes(directory);
+    std::string escaped_username = escape_for_double_quotes(config.username);
+    std::string escaped_password = escape_for_double_quotes(config.password);
+    std::string escaped_filename = escape_for_double_quotes(filename);
+
+    // Usa '-' come output file per scrivere su stdout
+    std::string command = "smbclient \"" + service + "\" -D \"" + escaped_directory + "\" -U \"" + 
+                  escaped_username + "%" + escaped_password + "\" -c \"get \\\"" + escaped_filename + "\\\" -\"";
+
+    // Non reindirizziamo stderr su stdout per non corrompere i dati binari con i log
+    std::unique_ptr<FILE, int(*)(FILE*)> pipe(popen(command.c_str(), "r"), pclose);
+    if (!pipe) return false;
+
+    std::array<char, 8192> buffer;
+    while (true) {
+        size_t bytes_read = fread(buffer.data(), 1, buffer.size(), pipe.get());
+        if (bytes_read > 0) {
+            data.insert(data.end(), buffer.data(), buffer.data() + bytes_read);
+        } else {
+            break;
+        }
+    }
+    return !data.empty();
 }
 
 // Helper per URL encoding
@@ -303,6 +346,7 @@ struct Metadata {
     std::string codec;
     unsigned int samplerate = 0;
     double size_mb = 0.0;
+    std::vector<char> rawCoverData;
 };
 
 class PlayerWindow : public Gtk::Window {
@@ -492,6 +536,8 @@ public:
 
         m_db_view.signal_row_activated().connect(sigc::mem_fun(*this, &PlayerWindow::on_db_row_activated));
         m_db_model->set_sort_column(m_columns.m_col_artist, Gtk::SORT_ASCENDING);
+        m_db_model->signal_sort_column_changed().connect(sigc::mem_fun(*this, &PlayerWindow::on_db_sort_changed));
+
 
 
         m_left_container.pack_start(m_folder_file_pane, Gtk::PACK_EXPAND_WIDGET);
@@ -1445,6 +1491,122 @@ public:
         }
     }
 
+    void fill_metadata_from_tags(GstTagList* tags, Metadata& meta) {
+        gchar *artist = nullptr, *title = nullptr, *album = nullptr, *genre = nullptr;
+        GstDateTime *date = nullptr;
+
+        if (gst_tag_list_get_string(tags, GST_TAG_ARTIST, &artist)) {
+            meta.artist = artist ? artist : "";
+            g_free(artist);
+        }
+        if (gst_tag_list_get_string(tags, GST_TAG_TITLE, &title)) {
+            meta.title = title ? title : "";
+            g_free(title);
+        }
+        if (gst_tag_list_get_string(tags, GST_TAG_ALBUM, &album)) {
+            meta.album = album ? album : "";
+            g_free(album);
+        }
+        if (gst_tag_list_get_string(tags, GST_TAG_GENRE, &genre)) {
+            meta.genre = genre ? genre : "";
+            g_free(genre);
+        }
+        if (gst_tag_list_get_date_time(tags, GST_TAG_DATE_TIME, &date)) {
+            if (gst_date_time_has_year(date)) {
+                meta.year = std::to_string(gst_date_time_get_year(date));
+            }
+            gst_date_time_unref(date);
+        }
+
+        guint bitrate = 0;
+        if (gst_tag_list_get_uint(tags, GST_TAG_BITRATE, &bitrate)) {
+            meta.bitrate = bitrate;
+        } else if (gst_tag_list_get_uint(tags, GST_TAG_NOMINAL_BITRATE, &bitrate)) {
+            meta.bitrate = bitrate;
+        }
+        gchar *codec = nullptr;
+        if (gst_tag_list_get_string(tags, GST_TAG_AUDIO_CODEC, &codec)) {
+            meta.codec = codec ? codec : "";
+            g_free(codec);
+        }
+
+        // Estrai copertina in memoria
+        GstSample *sample = nullptr;
+        if (gst_tag_list_get_sample(tags, GST_TAG_IMAGE, &sample) || 
+            gst_tag_list_get_sample(tags, GST_TAG_PREVIEW_IMAGE, &sample)) {
+            GstBuffer *buffer = gst_sample_get_buffer(sample);
+            GstMapInfo map;
+            if (gst_buffer_map(buffer, &map, GST_MAP_READ)) {
+                meta.rawCoverData.assign((char*)map.data, (char*)map.data + map.size);
+                gst_buffer_unmap(buffer, &map);
+            }
+            gst_sample_unref(sample);
+        }
+    }
+
+    Metadata extract_metadata_from_memory(const std::vector<char>& data) {
+        Metadata meta;
+        meta.size_mb = (double)data.size() / (1024.0 * 1024.0);
+
+        GstElement *pipeline = gst_pipeline_new("mem_meta_pipe");
+        GstElement *src = gst_element_factory_make("giostreamsrc", "src");
+        GstElement *decodebin = gst_element_factory_make("decodebin", "decode");
+        GstElement *fakesink = gst_element_factory_make("fakesink", "sink");
+
+        if (!pipeline || !src || !decodebin || !fakesink) {
+            if (pipeline) gst_object_unref(pipeline);
+            return meta;
+        }
+
+        // Setup memory stream source
+        GInputStream *stream = g_memory_input_stream_new_from_data(data.data(), data.size(), NULL);
+        g_object_set(src, "stream", stream, NULL);
+        g_object_unref(stream); // L'elemento prende ownership o ref
+
+        gst_bin_add_many(GST_BIN(pipeline), src, decodebin, fakesink, NULL);
+        gst_element_link(src, decodebin);
+
+        struct CallbackData {
+            GstElement* sink;
+            GstPad** audio_pad;
+        };
+        GstPad* audio_pad = nullptr;
+        CallbackData cb_data = { fakesink, &audio_pad };
+
+        // Logica identica a extract_metadata_internal per i segnali
+        g_signal_connect(decodebin, "pad-added", G_CALLBACK(+[](GstElement* /*element*/, GstPad* pad, gpointer user_data){
+            CallbackData* data = (CallbackData*)user_data;
+            GstCaps *caps = gst_pad_query_caps(pad, NULL);
+            bool is_audio = false;
+            if (caps) {
+                for(guint i = 0; i < gst_caps_get_size(caps); ++i) {
+                    const GstStructure *str = gst_caps_get_structure(caps, i);
+                    if (g_str_has_prefix(gst_structure_get_name(str), "audio/")) {
+                        is_audio = true;
+                        break;
+                    }
+                }
+                gst_caps_unref(caps);
+            }
+            if (is_audio) {
+                GstPad *sink_pad = gst_element_get_static_pad(data->sink, "sink");
+                if (!gst_pad_is_linked(sink_pad)) {
+                    if (gst_pad_link(pad, sink_pad) == GST_PAD_LINK_OK) {
+                        if (*(data->audio_pad) == nullptr) *(data->audio_pad) = (GstPad*)gst_object_ref(pad);
+                    }
+                }
+                gst_object_unref(sink_pad);
+            }
+        }), &cb_data);
+
+        gst_element_set_state(pipeline, GST_STATE_PAUSED);
+        run_metadata_loop(pipeline, meta, audio_pad);
+        
+        gst_element_set_state(pipeline, GST_STATE_NULL);
+        gst_object_unref(pipeline);
+        return meta;
+    }
+
     Metadata extract_metadata_internal(const std::string& local_path) {
         Metadata meta;
         // Get file size
@@ -1504,6 +1666,23 @@ public:
         
         gst_element_set_state(pipeline, GST_STATE_PAUSED);
         
+        run_metadata_loop(pipeline, meta, audio_pad);
+
+        // Mantieni compatibilità file-based: se abbiamo estratto una cover in RAM, salviamola su disco
+        if (!meta.rawCoverData.empty()) {
+            std::string cover_fn = local_path + ".cover.jpg";
+            std::ofstream f(cover_fn, std::ios::binary);
+            f.write(meta.rawCoverData.data(), meta.rawCoverData.size());
+            f.close();
+            meta.coverPath = cover_fn;
+        }
+
+        gst_element_set_state(pipeline, GST_STATE_NULL);
+        gst_object_unref(pipeline);
+        return meta;
+    }
+
+    void run_metadata_loop(GstElement* pipeline, Metadata& meta, GstPad*& audio_pad) {
         GstBus *bus = gst_element_get_bus(pipeline);
         bool done = false;
         gint64 timeout_ns = 2000 * GST_MSECOND;
@@ -1541,61 +1720,7 @@ public:
         }
         
         if (final_tags) {
-            gchar *artist = nullptr, *title = nullptr, *album = nullptr, *genre = nullptr;
-            GstDateTime *date = nullptr;
-
-            if (gst_tag_list_get_string(final_tags, GST_TAG_ARTIST, &artist)) {
-                meta.artist = artist ? artist : "";
-                g_free(artist);
-            }
-            if (gst_tag_list_get_string(final_tags, GST_TAG_TITLE, &title)) {
-                meta.title = title ? title : "";
-                g_free(title);
-            }
-            if (gst_tag_list_get_string(final_tags, GST_TAG_ALBUM, &album)) {
-                meta.album = album ? album : "";
-                g_free(album);
-            }
-            if (gst_tag_list_get_string(final_tags, GST_TAG_GENRE, &genre)) {
-                meta.genre = genre ? genre : "";
-                g_free(genre);
-            }
-            if (gst_tag_list_get_date_time(final_tags, GST_TAG_DATE_TIME, &date)) {
-                if (gst_date_time_has_year(date)) {
-                    meta.year = std::to_string(gst_date_time_get_year(date));
-                }
-                gst_date_time_unref(date);
-            }
-
-            guint bitrate = 0;
-            if (gst_tag_list_get_uint(final_tags, GST_TAG_BITRATE, &bitrate)) {
-                meta.bitrate = bitrate;
-            } else if (gst_tag_list_get_uint(final_tags, GST_TAG_NOMINAL_BITRATE, &bitrate)) {
-                meta.bitrate = bitrate;
-            }
-            gchar *codec = nullptr;
-            if (gst_tag_list_get_string(final_tags, GST_TAG_AUDIO_CODEC, &codec)) {
-                meta.codec = codec ? codec : "";
-                g_free(codec);
-            }
-
-            // Estrai copertina e salva su file temporaneo
-            GstSample *sample = nullptr;
-            if (gst_tag_list_get_sample(final_tags, GST_TAG_IMAGE, &sample) || 
-                gst_tag_list_get_sample(final_tags, GST_TAG_PREVIEW_IMAGE, &sample)) {
-                GstBuffer *buffer = gst_sample_get_buffer(sample);
-                GstMapInfo map;
-                if (gst_buffer_map(buffer, &map, GST_MAP_READ)) {
-                    std::string cover_fn = local_path + ".cover.jpg";
-                    std::ofstream f(cover_fn, std::ios::binary);
-                    f.write((char*)map.data, map.size);
-                    f.close();
-                    meta.coverPath = cover_fn;
-                    gst_buffer_unmap(buffer, &map);
-                }
-                gst_sample_unref(sample);
-            }
-
+            fill_metadata_from_tags(final_tags, meta);
             gst_tag_list_unref(final_tags);
         }
         
@@ -1614,16 +1739,12 @@ public:
         if (meta.bitrate == 0) {
             gint64 dur = 0;
             if (gst_element_query_duration(pipeline, GST_FORMAT_TIME, &dur) && dur > 0) {
-                uint64_t size_bytes = fs::file_size(local_path);
+                uint64_t size_bytes = (uint64_t)(meta.size_mb * 1024.0 * 1024.0);
                 double seconds = (double)dur / GST_SECOND;
                 meta.bitrate = (unsigned int)((size_bytes * 8) / seconds);
             }
         }
-
         gst_object_unref(bus);
-        gst_element_set_state(pipeline, GST_STATE_NULL);
-        gst_object_unref(pipeline);
-        return meta;
     }
 
     void on_search_online_clicked() {
@@ -2509,21 +2630,18 @@ public:
                 if (exists_in_db) continue;
 
                 std::string ext = fs::path(file_path).extension();
-                std::string temp_path = "/tmp/scan_temp_" + std::to_string(count) + ext;
-                if (download_smb_file(file_path, temp_path, m_config)) {
-                    Metadata meta = extract_metadata_internal(temp_path);
+                std::vector<char> file_data;
+                
+                if (download_smb_to_memory(file_path, file_data, m_config)) {
+                    Metadata meta = extract_metadata_from_memory(file_data);
                     
-                    // Metti in cache la copertina se estratta
-                    if (!meta.coverPath.empty() && fs::exists(meta.coverPath)) {
+                    // Metti in cache la copertina se estratta in memoria
+                    if (!meta.rawCoverData.empty()) {
                         std::string cache_cover_path = get_hashed_path(file_path, ".jpg");
-                        try {
-                            fs::copy_file(meta.coverPath, cache_cover_path, fs::copy_options::overwrite_existing);
-                            fs::remove(meta.coverPath);
-                            meta.coverPath = cache_cover_path;
-                        } catch (const fs::filesystem_error& e) {
-                            LOG(ERROR, "Failed to cache cover: " << e.what());
-                            meta.coverPath = "";
-                        }
+                        std::ofstream f(cache_cover_path, std::ios::binary);
+                        f.write(meta.rawCoverData.data(), meta.rawCoverData.size());
+                        meta.coverPath = cache_cover_path;
+                        meta.rawCoverData.clear(); // Libera RAM
                     }
 
                     if (m_db) {
@@ -2549,7 +2667,7 @@ public:
                             sqlite3_finalize(stmt_insert);
                         }
                     }
-                    fs::remove(temp_path);
+                    // file_data viene liberato automaticamente qui
                 }
 
                 // Gestione salvataggio a blocchi (Batch Commit)
@@ -2666,6 +2784,37 @@ public:
         }
     }
 
+    void on_db_sort_changed() {
+        auto selection = m_db_view.get_selection();
+        if (auto iter = selection->get_selected()) {
+            // Store the unique path of the selected item
+            m_selected_db_path_before_sort = (*iter)[m_columns.m_col_path];
+
+            // The sort happens after this handler returns.
+            // Schedule a one-time idle callback to re-select the row after sorting.
+            Glib::signal_idle().connect([this]() {
+                if (m_selected_db_path_before_sort.empty()) {
+                    return false;
+                }
+
+                // Iterate through the now-sorted model to find the item
+                for (const auto& row : m_db_model->children()) {
+                    if ((Glib::ustring)row[m_columns.m_col_path] == m_selected_db_path_before_sort) {
+                        m_db_view.get_selection()->select(row);
+                        m_db_view.scroll_to_row(m_db_model->get_path(row));
+                        break;
+                    }
+                }
+
+                // Clear the stored path and stop the idle callback
+                m_selected_db_path_before_sort.clear();
+                return false;
+            });
+        } else {
+            m_selected_db_path_before_sort.clear();
+        }
+    }
+
 protected:
     SambaConfig m_config;
     Gtk::Box m_box; 
@@ -2766,6 +2915,7 @@ protected:
     Gtk::TreeView* m_context_view = nullptr;
     std::atomic<int> m_folder_selection_gen;
     Gtk::TreeViewColumn* m_pColFile;
+    Glib::ustring m_selected_db_path_before_sort;
 };
 
 int main(int argc, char *argv[]) {
