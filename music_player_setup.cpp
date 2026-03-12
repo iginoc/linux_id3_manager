@@ -265,10 +265,21 @@ protected:
 class ModelColumns : public Gtk::TreeModel::ColumnRecord
 {
 public:
-    ModelColumns() { add(m_col_name); add(m_col_path); add(m_col_icon); }
+    ModelColumns() { 
+        add(m_col_name); add(m_col_path); add(m_col_icon); 
+        // Colonne aggiuntive per la vista DB dettagliata
+        add(m_col_artist); add(m_col_title); add(m_col_album);
+        add(m_col_year); add(m_col_genre);
+    }
     Gtk::TreeModelColumn<Glib::ustring> m_col_name;
     Gtk::TreeModelColumn<Glib::ustring> m_col_path;
     Gtk::TreeModelColumn<Glib::ustring> m_col_icon;
+
+    Gtk::TreeModelColumn<Glib::ustring> m_col_artist;
+    Gtk::TreeModelColumn<Glib::ustring> m_col_title;
+    Gtk::TreeModelColumn<Glib::ustring> m_col_album;
+    Gtk::TreeModelColumn<Glib::ustring> m_col_year;
+    Gtk::TreeModelColumn<Glib::ustring> m_col_genre;
 };
 
 class DeviceColumns : public Gtk::TreeModel::ColumnRecord
@@ -333,17 +344,12 @@ public:
 
         m_btn_play.set_label("Play");
         m_btn_play.signal_clicked().connect(sigc::mem_fun(*this, &PlayerWindow::on_play_clicked));
-        m_top_bar.pack_start(m_btn_play, Gtk::PACK_SHRINK);
 
         m_btn_pause.set_label("Pausa");
         m_btn_pause.signal_clicked().connect(sigc::mem_fun(*this, &PlayerWindow::on_pause_clicked));
-        m_top_bar.pack_start(m_btn_pause, Gtk::PACK_SHRINK);
 
         m_btn_stop.set_label("Stop");
         m_btn_stop.signal_clicked().connect(sigc::mem_fun(*this, &PlayerWindow::on_stop_clicked));
-        m_top_bar.pack_start(m_btn_stop, Gtk::PACK_SHRINK);
-
-        m_top_bar.pack_start(m_slider_box, Gtk::PACK_EXPAND_WIDGET);
 
         m_btnCast.set_label("Cerca Dispositivo");
         m_btnCast.signal_clicked().connect(sigc::mem_fun(*this, &PlayerWindow::on_cast_clicked));
@@ -458,17 +464,34 @@ public:
         m_db_scrolled_window.add(m_db_view);
         m_db_model = Gtk::ListStore::create(m_columns);
         m_db_view.set_model(m_db_model);
-        auto pColDB = Gtk::manage(new Gtk::TreeViewColumn("Database"));
-        auto pRenIconDB = Gtk::manage(new Gtk::CellRendererPixbuf());
-        auto pRenTextDB = Gtk::manage(new Gtk::CellRendererText());
-        pColDB->pack_start(*pRenIconDB, false);
-        pColDB->pack_start(*pRenTextDB, true);
-        pColDB->add_attribute(pRenIconDB->property_icon_name(), m_columns.m_col_icon);
-        pColDB->add_attribute(pRenTextDB->property_text(), m_columns.m_col_name);
-        pColDB->set_sort_column(m_columns.m_col_name);
-        m_db_view.append_column(*pColDB);
+        
+        // Configurazione Colonne DB
+        m_db_view.append_column("Artista", m_columns.m_col_artist);
+        m_db_view.get_column(0)->set_sort_column(m_columns.m_col_artist);
+        m_db_view.get_column(0)->set_resizable(true);
+
+        m_db_view.append_column("Titolo", m_columns.m_col_title);
+        m_db_view.get_column(1)->set_sort_column(m_columns.m_col_title);
+        m_db_view.get_column(1)->set_resizable(true);
+
+        m_db_view.append_column("Album", m_columns.m_col_album);
+        m_db_view.get_column(2)->set_sort_column(m_columns.m_col_album);
+        m_db_view.get_column(2)->set_resizable(true);
+
+        m_db_view.append_column("Anno", m_columns.m_col_year);
+        m_db_view.get_column(3)->set_sort_column(m_columns.m_col_year);
+        m_db_view.get_column(3)->set_resizable(true);
+
+        m_db_view.append_column("Genere", m_columns.m_col_genre);
+        m_db_view.get_column(4)->set_sort_column(m_columns.m_col_genre);
+        m_db_view.get_column(4)->set_resizable(true);
+
+        m_db_view.append_column("Directory", m_columns.m_col_path);
+        m_db_view.get_column(5)->set_sort_column(m_columns.m_col_path);
+        m_db_view.get_column(5)->set_resizable(true);
+
         m_db_view.signal_row_activated().connect(sigc::mem_fun(*this, &PlayerWindow::on_db_row_activated));
-        m_db_model->set_sort_column(m_columns.m_col_name, Gtk::SORT_ASCENDING);
+        m_db_model->set_sort_column(m_columns.m_col_artist, Gtk::SORT_ASCENDING);
 
 
         m_left_container.pack_start(m_folder_file_pane, Gtk::PACK_EXPAND_WIDGET);
@@ -548,6 +571,16 @@ public:
         m_btn_save_cover.set_label("Salva Copertina");
         m_btn_save_cover.signal_clicked().connect(sigc::mem_fun(*this, &PlayerWindow::on_save_cover_clicked));
         m_col3_box.pack_start(m_btn_save_cover, Gtk::PACK_SHRINK);
+
+        // Controlli Playback spostati qui
+        m_btn_box.set_orientation(Gtk::ORIENTATION_HORIZONTAL);
+        m_btn_box.set_spacing(5);
+        m_btn_box.set_halign(Gtk::ALIGN_CENTER);
+        m_btn_box.pack_start(m_btn_play, Gtk::PACK_SHRINK);
+        m_btn_box.pack_start(m_btn_pause, Gtk::PACK_SHRINK);
+        m_btn_box.pack_start(m_btn_stop, Gtk::PACK_SHRINK);
+        m_col3_box.pack_start(m_btn_box, Gtk::PACK_SHRINK);
+        m_col3_box.pack_start(m_slider_box, Gtk::PACK_SHRINK);
 
         m_col3_box.pack_start(m_audio_controls_box, Gtk::PACK_SHRINK);
         m_image_preview.set_halign(Gtk::ALIGN_END);
@@ -2317,22 +2350,34 @@ public:
         if (!m_db) return;
         m_db_model->clear();
         
-        const char* sql = "SELECT artist, title, path FROM music ORDER BY artist, album, title;";
+        const char* sql = "SELECT artist, title, album, year, genre, path FROM music ORDER BY artist, album, title;";
         sqlite3_stmt* stmt;
         if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, 0) == SQLITE_OK) {
             while (sqlite3_step(stmt) == SQLITE_ROW) {
                 const unsigned char* artist_unsigned = sqlite3_column_text(stmt, 0);
                 const unsigned char* title_unsigned = sqlite3_column_text(stmt, 1);
-                const unsigned char* path_unsigned = sqlite3_column_text(stmt, 2);
+                const unsigned char* album_unsigned = sqlite3_column_text(stmt, 2);
+                const unsigned char* year_unsigned = sqlite3_column_text(stmt, 3);
+                const unsigned char* genre_unsigned = sqlite3_column_text(stmt, 4);
+                const unsigned char* path_unsigned = sqlite3_column_text(stmt, 5);
 
                 std::string artist = artist_unsigned ? (const char*)artist_unsigned : "";
                 std::string title = title_unsigned ? (const char*)title_unsigned : "";
+                std::string album = album_unsigned ? (const char*)album_unsigned : "";
+                std::string year = year_unsigned ? (const char*)year_unsigned : "";
+                std::string genre = genre_unsigned ? (const char*)genre_unsigned : "";
                 std::string path = path_unsigned ? (const char*)path_unsigned : "";
                 
                 Gtk::TreeModel::Row row = *(m_db_model->append());
                 row[m_columns.m_col_name] = artist + " - " + title;
                 row[m_columns.m_col_path] = path;
                 row[m_columns.m_col_icon] = "audio-x-generic";
+
+                row[m_columns.m_col_artist] = artist;
+                row[m_columns.m_col_title] = title;
+                row[m_columns.m_col_album] = album;
+                row[m_columns.m_col_year] = year;
+                row[m_columns.m_col_genre] = genre;
             }
         }
         sqlite3_finalize(stmt);
@@ -2441,8 +2486,8 @@ public:
                 std::string filename = fs::path(file_path).filename();
                 double fraction = total > 0 ? (double)count / total : 0.0;
                 
-                Glib::signal_idle().connect([this, count, total, filename, fraction]() {
-                    std::string text = "Fase 2: " + std::to_string(count) + "/" + std::to_string(total) + " - " + filename;
+                Glib::signal_idle().connect([this, count, total, fraction]() {
+                    std::string text = std::to_string(count) + " / " + std::to_string(total);
                     m_scan_progress_bar.set_fraction(fraction);
                     m_scan_progress_bar.set_text(text);
                     return false;
@@ -2499,14 +2544,9 @@ public:
                             sqlite3_bind_double(stmt_insert, 11, meta.size_mb);
                             
                             if (sqlite3_step(stmt_insert) != SQLITE_DONE) {
-                                LOG(ERROR, "SQL insert failed for " << file_path << ": " << sqlite3_errmsg(m_db));
-                            }
-                            else {
-                                LOG(INFO, "Inserito nel DB: " << filename);
+                                // Errore di inserimento silenziato per non mostrare nomi file nella shell.
                             }
                             sqlite3_finalize(stmt_insert);
-                        } else {
-                            LOG(ERROR, "SQL prepare failed for " << file_path << ": " << sqlite3_errmsg(m_db));
                         }
                     }
                     fs::remove(temp_path);
@@ -2546,7 +2586,7 @@ public:
         // Aggiorna la barra di stato per mostrare che stiamo lavorando
         Glib::signal_idle().connect([this, path, count = audio_files.size()]() {
             if (m_scan_running) {
-                m_scan_progress_bar.set_text("Ricerca: " + std::to_string(count) + " files | " + fs::path(path).filename().string());
+                m_scan_progress_bar.set_text("Fase 1: Trovati " + std::to_string(count) + " brani...");
             }
             return false;
         });

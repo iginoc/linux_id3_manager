@@ -1,5 +1,13 @@
+# Database musicale
+music_library.db
+
+# File di configurazione (contiene credenziali Samba)
 .music_config
+
+# Cache e file temporanei
 .music_metadata_cache
 cache/
+venv/
+
+# Eseguibile compilato
 music_player
-*.o
