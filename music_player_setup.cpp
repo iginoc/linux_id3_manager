@@ -2464,6 +2464,27 @@ public:
             sqlite3_free(err_msg);
             sqlite3_close(m_db);
             m_db = nullptr;
+            return;
+        }
+
+        // Migrazione Schema: Tentiamo di aggiungere le colonne se mancano (per DB vecchi)
+        const char* migration_sqls[] = {
+            "ALTER TABLE music ADD COLUMN artist TEXT;",
+            "ALTER TABLE music ADD COLUMN title TEXT;",
+            "ALTER TABLE music ADD COLUMN album TEXT;",
+            "ALTER TABLE music ADD COLUMN year TEXT;",
+            "ALTER TABLE music ADD COLUMN genre TEXT;",
+            "ALTER TABLE music ADD COLUMN coverPath TEXT;",
+            "ALTER TABLE music ADD COLUMN bitrate INTEGER;",
+            "ALTER TABLE music ADD COLUMN codec TEXT;",
+            "ALTER TABLE music ADD COLUMN samplerate INTEGER;",
+            "ALTER TABLE music ADD COLUMN size_mb REAL;"
+        };
+
+        for (const char* query : migration_sqls) {
+            char* err = nullptr;
+            sqlite3_exec(m_db, query, 0, 0, &err);
+            if (err) sqlite3_free(err); // Ignoriamo errori (es. colonna già esistente)
         }
     }
 
@@ -2490,7 +2511,11 @@ public:
                 std::string path = path_unsigned ? (const char*)path_unsigned : "";
                 
                 Gtk::TreeModel::Row row = *(m_db_model->append());
-                row[m_columns.m_col_name] = artist + " - " + title;
+                if (!artist.empty() && !title.empty()) {
+                    row[m_columns.m_col_name] = artist + " - " + title;
+                } else {
+                    row[m_columns.m_col_name] = fs::path(path).filename().string();
+                }
                 row[m_columns.m_col_path] = path;
                 row[m_columns.m_col_icon] = "audio-x-generic";
 
@@ -2618,7 +2643,9 @@ public:
                 bool exists_in_db = false;
                 if (m_db) {
                     sqlite3_stmt* stmt;
-                    const char* sql = "SELECT 1 FROM music WHERE path = ?;";
+                    // Controlliamo se esiste E se ha i metadati popolati (size_mb non NULL).
+                    // Se size_mb è NULL, è un vecchio record che va aggiornato.
+                    const char* sql = "SELECT 1 FROM music WHERE path = ? AND size_mb IS NOT NULL;";
                     if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, 0) == SQLITE_OK) {
                         sqlite3_bind_text(stmt, 1, file_path.c_str(), -1, SQLITE_STATIC);
                         if (sqlite3_step(stmt) == SQLITE_ROW) {
@@ -2630,19 +2657,23 @@ public:
                 if (exists_in_db) continue;
 
                 std::string ext = fs::path(file_path).extension();
-                std::vector<char> file_data;
+                // USARE FILE TEMPORANEO SU DISCO (Più affidabile di RAM/Pipe)
+                std::string temp_path = "/tmp/scan_temp_" + std::to_string(count % 5) + ext;
+                if (fs::exists(temp_path)) fs::remove(temp_path);
                 
-                if (download_smb_to_memory(file_path, file_data, m_config)) {
-                    Metadata meta = extract_metadata_from_memory(file_data);
+                if (download_smb_file(file_path, temp_path, m_config)) {
+                    Metadata meta = extract_metadata_internal(temp_path);
                     
-                    // Metti in cache la copertina se estratta in memoria
-                    if (!meta.rawCoverData.empty()) {
-                        std::string cache_cover_path = get_hashed_path(file_path, ".jpg");
-                        std::ofstream f(cache_cover_path, std::ios::binary);
-                        f.write(meta.rawCoverData.data(), meta.rawCoverData.size());
-                        meta.coverPath = cache_cover_path;
-                        meta.rawCoverData.clear(); // Libera RAM
+                    // Gestione copertina estratta su file
+                    if (!meta.coverPath.empty() && fs::exists(meta.coverPath)) {
+                        std::string cache_cover = get_hashed_path(file_path, ".jpg");
+                        try {
+                            fs::copy_file(meta.coverPath, cache_cover, fs::copy_options::overwrite_existing);
+                            meta.coverPath = cache_cover;
+                        } catch(...) {}
+                        fs::remove(meta.coverPath); // Rimuovi cover temp
                     }
+                    fs::remove(temp_path); // Rimuovi audio temp
 
                     if (m_db) {
                         const char* sql_insert = "INSERT OR REPLACE INTO music (path, artist, title, album, year, genre, coverPath, bitrate, codec, samplerate, size_mb) "
@@ -2665,9 +2696,12 @@ public:
                                 // Errore di inserimento silenziato per non mostrare nomi file nella shell.
                             }
                             sqlite3_finalize(stmt_insert);
+                        } else {
+                            LOG(ERROR, "Prepare insert failed: " << sqlite3_errmsg(m_db));
                         }
                     }
-                    // file_data viene liberato automaticamente qui
+                } else {
+                    LOG(ERROR, "Download fallito durante scansione: " << file_path);
                 }
 
                 // Gestione salvataggio a blocchi (Batch Commit)
