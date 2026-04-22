@@ -1,0 +1,508 @@
+[INFO] music_player_setup.cpp:3706 main() Starting application
+[INFO] music_player_setup.cpp:3212 init_db() Database initialized successfully.
+[INFO] music_player_setup.cpp:63 loadConfig() Loading config
+[INFO] music_player_setup.cpp:74 loadConfig() Config loaded
+[INFO] music_player_setup.cpp:3091 refresh_list() Refreshing list
+[DEBUG] music_player_setup.cpp:3096 refresh_list() Starting refresh_list for Samba path: smb://192.168.188.41/media/musica
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   .                                   D        0  Thu Mar 26 13:58:28 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   ..                                  D        0  Sun Mar 22 08:58:05 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Ultimo - Peter Pan (2018)           D        0  Wed Mar  4 16:04:52 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Gemitaiz-Nonostante.Tutto.2016      D        0  Wed Mar  4 15:56:58 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   mp3 vinti                           D        0  Wed Mar  4 16:02:24 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Latina                              D        0  Thu Mar  5 07:52:57 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   eros razzotti                       D        0  Wed Mar  4 15:55:55 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Vari                                D        0  Wed Mar  4 16:05:33 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Baby K                              D        0  Mon Apr 28 09:51:32 2025
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Duran Duran                         D        0  Wed Mar  4 15:55:02 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   George Benson                       D        0  Wed Mar  4 15:57:02 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   canzoni dj                          D        0  Thu Mar 26 14:15:21 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Gianni Togni                        D        0  Wed Mar  4 15:57:04 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Police                              D        0  Wed Mar  4 16:03:51 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Noemi                               D        0  Wed Mar  4 16:03:02 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Simona Molinari                     D        0  Thu Mar 12 09:59:02 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Francis Lai                         D        0  Wed Mar  4 15:56:52 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Luca                                D        0  Wed Mar  4 16:00:06 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   2025                                D        0  Wed Mar  4 15:48:24 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   ZZ Top - Greatest Hits              D        0  Wed Mar  4 16:07:04 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Soleil Bleu                         D        0  Thu Mar  5 18:17:21 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Modà                               D        0  Wed Mar  4 16:02:22 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   2002                                D        0  Mon Feb 16 16:52:28 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   R.E.M_                              D        0  Wed Mar  4 16:03:51 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Claudio Baglioni                    D        0  Wed Mar  4 15:53:22 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Marco Guazzone & Stag               D        0  Wed Mar  4 16:02:13 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   My Chemical Romance                 D        0  Wed Mar  4 16:02:50 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Vic Damone                          D        0  Wed Mar  4 16:06:58 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Unknown Artist                      D        0  Wed Mar  4 16:04:56 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Gemelli.Diversi-1998.2016           D        0  Wed Mar  4 15:56:54 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Steve Baker & Carmen Dave           D        0  Wed Mar  4 16:04:37 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Classica                            D        0  Wed Mar  4 15:52:40 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Ricky Martin                        D        0  Wed Mar  4 16:04:00 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Gianna Nannini                      D        0  Wed Mar  4 15:57:04 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Dolcenera - Evoluzione della specie 2      D        0  Wed Mar  4 15:55:02 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   playlist m2o                        D        0  Wed Mar  4 16:03:40 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Rino Gaetano                        D        0  Wed Mar  4 16:04:05 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Rocco Hunt - Libertà               D        0  Wed Mar  4 16:04:06 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   2014                                D        0  Wed Mar  4 15:47:37 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   anni 70                             D        0  Wed Mar  4 15:50:06 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Inxs                                D        0  Wed Mar  4 15:57:07 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Trevor Jones                        D        0  Wed Mar  4 16:04:48 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Ligabue                             D        0  Wed Mar  4 15:59:58 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   english                             D        0  Wed Mar  4 15:55:55 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Varie 2007                          D        0  Wed Mar  4 16:06:48 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Francesco Guccini                   D        0  Wed Mar  4 15:56:52 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Laura Pausini                       D        0  Wed Mar  4 15:59:50 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Ini Kamoze                          D        0  Wed Mar  4 15:57:07 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Snow Patrol                         D        0  Wed Mar  4 16:04:34 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   La Esquina                          D        0  Wed Mar  4 15:58:52 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Tears for Fears                     D        0  Wed Mar  4 16:04:43 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Fallout Boy                         D        0  Wed Mar  4 15:55:57 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Ligabue-Giro.Del.Mondo.2015         D        0  Wed Mar  4 16:00:02 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Oingo Boingo                        D        0  Wed Mar  4 16:03:03 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   The Mcguire Sisters                 D        0  Thu Dec 25 06:43:52 2025
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Gary Low                            D        0  Wed Mar  4 15:56:53 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   2024                                D        0  Wed Mar  4 15:48:16 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Madonna                             D        0  Wed Mar  4 16:02:11 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Elisa                               D        0  Wed Mar  4 15:55:53 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Randy Edelman                       D        0  Wed Mar  4 16:03:57 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Kool and the gang                   D        0  Wed Mar  4 15:58:52 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Michael Andrews & Gary Jules        D        0  Wed Mar  4 16:02:16 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Stanley Clarke                      D        0  Wed Mar  4 16:04:36 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Sam Bauer & Gerard Bauer            D        0  Wed Mar  4 16:04:07 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Neil Young                          D        0  Wed Mar  4 16:03:01 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Skrillex                            D        0  Wed Mar  4 16:04:32 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Willy Chirino                       D        0  Wed Mar  4 16:06:58 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Keith Jarrett                       D        0  Wed Mar  4 15:58:49 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Ub 40                               D        0  Wed Mar  4 16:04:49 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   FEDEZ                               D        0  Wed Mar  4 15:56:05 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Scott henderson - tore down house (1997)      D        0  Wed Mar  4 16:04:27 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   John Denver                         D        0  Thu Mar  5 07:54:55 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Eugenio Finardi                     D        0  Wed Mar  4 15:55:57 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Ray Charles                         D        0  Wed Mar  4 16:03:57 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Eurythmics                          D        0  Wed Mar  4 15:55:57 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Rosemary Clooney                    D        0  Wed Mar  4 16:04:07 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Biagio Antonacci                    D        0  Wed Mar  4 15:52:18 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Michael Andrews                     D        0  Wed Mar  4 16:02:15 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Edoardo Bennato                     D        0  Wed Mar  4 15:55:34 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   itunes                              D        0  Wed Mar  4 15:57:11 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Gemitaiz & MadMan - Scatola Nera      D        0  Wed Mar  4 15:56:55 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Balli di gruppo                     D        0  Wed Mar  4 15:52:10 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Vasco Rossi                         D        0  Wed Mar  4 16:06:48 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Zucchero                            D        0  Wed Mar  4 16:06:59 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Take That                           D        0  Wed Mar  4 16:04:37 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Katy Perry                          D        0  Wed Mar  4 15:58:47 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Peter Andre                         D        0  Wed Mar  4 16:03:06 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   The Connels                         D        0  Wed Mar  4 16:04:43 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Alice                               D        0  Wed Mar  4 15:48:44 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Pierangelo Bertoli - Discografia Completa (1974-2007)      D        0  Sat Jul 26 08:38:30 2025
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   MUSIC                               D        0  Wed Mar  4 16:02:49 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Dire Straits                        D        0  Wed Mar  4 15:53:55 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   2015                                D        0  Wed Mar  4 15:47:56 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Gemitaiz-Davide-2018                D        0  Wed Mar  4 15:56:56 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Spandau Ballet                      D        0  Wed Mar  4 16:04:34 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Extreme                             D        0  Wed Mar  4 15:55:57 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Zerb                                D        0  Thu Mar  5 18:04:38 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Marracash - Persona (2019)          D        0  Wed Mar  4 16:02:15 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Meredith Brooks                     D        0  Wed Mar  4 16:02:15 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Manu Chao                           D        0  Wed Mar  4 16:02:13 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Simply Red                          D        0  Wed Mar  4 16:04:28 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Colonne sonore                      D        0  Wed Mar  4 15:53:40 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Tonino Carotone                     D        0  Wed Mar  4 16:04:48 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Keith Jarrett Trio                  D        0  Wed Mar  4 15:58:50 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   anni 80                             D        0  Wed Mar  4 15:51:45 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   883                                 D        0  Wed Mar  4 15:46:59 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Lucio Dalla                         D        0  Wed Mar  4 16:02:06 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Spice Girls                         D        0  Wed Mar  4 16:04:34 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Radio                               D        0  Wed Mar 11 18:59:54 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Nicola Conte                        D        0  Wed Mar  4 16:03:02 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Cesare Cremonini                    D        0  Wed Mar  4 15:52:21 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Cher                                D        0  Wed Mar  4 15:52:23 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Giulio Caccini & Paul Pritchar      D        0  Wed Mar  4 15:57:04 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   2018                                D        0  Wed Mar  4 15:48:04 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Oasis                               D        0  Wed Mar  4 16:03:03 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Francesco De Gregori                D        0  Wed Mar  4 15:56:07 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Michael Buble                       D        0  Wed Mar  4 16:02:19 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Lady Gaga                           D        0  Wed Mar  4 15:58:54 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Fink                                D        0  Wed Mar  4 15:56:06 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   New Stories                         D        0  Wed Mar  4 16:03:02 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Hairspray                           D        0  Wed Mar  4 15:57:05 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Lio                                 D        0  Wed Mar  4 16:00:02 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Spin Doctors                        D        0  Wed Mar  4 16:04:34 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Razorlight                          D        0  Wed Mar  4 16:03:59 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Adriano Celentano                   D        0  Wed Mar  4 15:48:34 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Natale                              D        0  Wed Mar  4 16:02:57 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Hilary Duff                         D        0  Wed Mar  4 15:57:05 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Laura Pausini - Inédito            D        0  Wed Mar  4 15:59:52 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   blues                               D        0  Thu Mar  5 07:52:03 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Tilt                                D        0  Wed Mar  4 16:04:48 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   varie                               D        0  Wed Mar  4 16:06:44 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Ketama                              D        0  Wed Mar  4 15:58:50 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Scott Henderson                     D        0  Wed Mar  4 16:04:25 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Just Jack                           D        0  Wed Mar  4 15:58:46 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Stan Getz_João Gilberto            D        0  Wed Mar  4 16:04:35 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Luca Carboni                        D        0  Wed Mar  4 16:00:14 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   santino                             D        0  Wed Mar  4 16:04:22 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Raoul                               D        0  Wed Mar  4 16:03:57 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   disco                               D        0  Wed Mar  4 15:54:49 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   favorites.m3u                       A      615  Thu Mar  5 16:29:30 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Coldplay                            D        0  Wed Mar  4 15:53:23 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Gigi D'alessio & Loredana Berte      D        0  Wed Mar  4 15:57:04 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Luci Battisti                       D        0  Wed Mar  4 16:00:30 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Pino Daniele The platinum Collection      D        0  Wed Mar  4 16:03:37 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Jazz                                D        0  Thu Mar  5 07:55:16 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Tango                               D        0  Wed Mar  4 16:04:43 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   anni 90                             D        0  Wed Mar  4 15:51:57 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   The Church                          D        0  Wed Mar  4 16:04:43 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   anni 50-60                          D        0  Wed Mar  4 15:49:39 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Domenico Modugno                    D        0  Wed Mar  4 15:55:02 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   The Police                          D        0  Wed Mar  4 16:04:47 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Alessandra Amoroso                  D        0  Wed Mar  4 15:48:42 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Arisa                               D        0  Wed Mar  4 15:51:59 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Scissor Sisters                     D        0  Wed Mar  4 16:04:24 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Sheryl Crow                         D        0  Wed Mar  4 16:04:27 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Pet Shop Boys                       D        0  Wed Mar  4 16:03:04 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Pink Floyd                          D        0  Wed Mar  4 16:03:33 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Dj Matrix                           D        0  Wed Mar  4 15:55:00 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   hooverphonic                        D        0  Wed Mar  4 15:57:06 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Renzo Arbore                        D        0  Wed Mar  4 16:04:00 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Nomadi                              D        0  Wed Mar  4 16:03:02 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   dj                                  D        0  Wed Mar  4 15:54:57 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   tony esposito                       D        0  Wed Mar  4 16:04:48 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Lilly Allen                         D        0  Wed Mar  4 16:00:02 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Celine Dion                         D        0  Wed Mar  4 15:52:20 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Mika                                D        0  Wed Mar  4 16:02:19 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Keira                               D        0  Wed Mar  4 20:59:55 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Kool & the Gang                     D        0  Wed Mar  4 15:58:50 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Nek                                 D        0  Wed Mar  4 16:03:01 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Best of TOKIO                       D        0  Wed Mar  4 15:52:14 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Maroon 5                            D        0  Wed Mar  4 16:02:13 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   gayle                               D        0  Wed Mar  4 15:56:53 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   lene marlin                         D        0  Wed Mar  4 15:59:54 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Samuele Bersani                     D        0  Wed Mar  4 16:04:07 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Gerard Bauer & Mike Bauer           D        0  Wed Mar  4 15:57:04 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Ultimo-Colpa.Delle.Favole-2019      D        0  Wed Mar  4 16:04:54 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Piero Pelù                         D        0  Wed Mar  4 16:03:31 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Angelo Branduardi                   D        0  Wed Mar  4 15:49:30 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Yo-Yo Ma                            D        0  Wed Mar  4 16:06:58 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Compilations                        D        0  Wed Mar  4 15:53:55 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Maria Gadú                         D        0  Wed Mar  4 16:02:13 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Reel 2 Real                         D        0  Wed Mar  4 16:03:59 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Pierangelo Bertoli                  D        0  Wed Mar  4 16:03:29 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Klaxons                             D        0  Wed Mar  4 15:58:50 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   stan getz Joao gilberto - GETZ-GILBERTO (1963)      D        0  Wed Mar  4 16:04:35 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Savage Garden                       D        0  Wed Mar  4 16:04:24 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Sting & The Police                  D        0  Wed Mar  4 16:04:37 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   U2                                  D        0  Wed Mar  4 16:04:49 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   La Mosca Tse-Tse                    D        0  Wed Mar  4 15:58:54 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Guillemots                          D        0  Wed Mar  4 15:57:05 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Sergio Mendes                       D        0  Wed Mar  4 16:04:27 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Mark Knopfler                       D        0  Wed Mar  4 16:02:13 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Aitana                              D        0  Wed Mar  4 15:48:36 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   2000                                D        0  Fri Jul 11 15:21:30 2025
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Rihanna                             D        0  Wed Mar  4 16:04:04 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Mecano                              D        0  Wed Mar  4 16:02:15 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   2012                                D        0  Wed Mar  4 15:47:01 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line:   Avicii                              D        0  Wed Mar  4 15:52:00 2026
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line: 
+[DEBUG] music_player_setup.cpp:3111 operator()() Parsing SMB line: 		480678464 blocks of size 1024. 355614228 blocks available
+[DEBUG] music_player_setup.cpp:3140 operator()() Finished refreshing list. Found 196 files.
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+
+(music_player:61549): Gtk-CRITICAL **: 14:43:01.986: gtk_text_buffer_emit_insert: assertion 'g_utf8_validate (text, len, NULL)' failed
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+
+(music_player:61549): Gtk-CRITICAL **: 14:43:10.817: gtk_text_buffer_emit_insert: assertion 'g_utf8_validate (text, len, NULL)' failed
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+
+(music_player:61549): Gtk-CRITICAL **: 14:43:13.611: gtk_text_buffer_emit_insert: assertion 'g_utf8_validate (text, len, NULL)' failed
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+
+(music_player:61549): Gtk-CRITICAL **: 14:43:14.247: gtk_text_buffer_emit_insert: assertion 'g_utf8_validate (text, len, NULL)' failed
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+
+(music_player:61549): Gtk-CRITICAL **: 14:43:15.130: gtk_text_buffer_emit_insert: assertion 'g_utf8_validate (text, len, NULL)' failed
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+
+(music_player:61549): Gtk-CRITICAL **: 14:43:15.784: gtk_text_buffer_emit_insert: assertion 'g_utf8_validate (text, len, NULL)' failed
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+
+(music_player:61549): Gtk-CRITICAL **: 14:43:16.483: gtk_text_buffer_emit_insert: assertion 'g_utf8_validate (text, len, NULL)' failed
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+
+(music_player:61549): Gtk-CRITICAL **: 14:43:17.126: gtk_text_buffer_emit_insert: assertion 'g_utf8_validate (text, len, NULL)' failed
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+
+(music_player:61549): Gtk-CRITICAL **: 14:43:26.591: gtk_text_buffer_emit_insert: assertion 'g_utf8_validate (text, len, NULL)' failed
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+
+(music_player:61549): Gtk-CRITICAL **: 14:43:29.986: gtk_text_buffer_emit_insert: assertion 'g_utf8_validate (text, len, NULL)' failed
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+
+(music_player:61549): Gtk-CRITICAL **: 14:43:30.724: gtk_text_buffer_emit_insert: assertion 'g_utf8_validate (text, len, NULL)' failed
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+
+(music_player:61549): Gtk-CRITICAL **: 14:43:31.321: gtk_text_buffer_emit_insert: assertion 'g_utf8_validate (text, len, NULL)' failed
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+
+(music_player:61549): Gtk-CRITICAL **: 14:43:31.992: gtk_text_buffer_emit_insert: assertion 'g_utf8_validate (text, len, NULL)' failed
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+
+(music_player:61549): Gtk-CRITICAL **: 14:43:32.779: gtk_text_buffer_emit_insert: assertion 'g_utf8_validate (text, len, NULL)' failed
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+
+(music_player:61549): Gtk-CRITICAL **: 14:43:50.932: gtk_text_buffer_emit_insert: assertion 'g_utf8_validate (text, len, NULL)' failed
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1599 play_track() Attempting to play track: Gabry Ponte, ONESOLO - Shining from path: /media/igino/IPOD DI IGI/iPod_Control/Music/F00/LWZV.mp3
+[DEBUG] music_player_setup.cpp:3526 update_db_labels() Updating DB labels for path: /media/igino/IPOD DI IGI/iPod_Control/Music/F00/LWZV.mp3
+[DEBUG] music_player_setup.cpp:3544 update_db_labels() No DB entry found for path: /media/igino/IPOD DI IGI/iPod_Control/Music/F00/LWZV.mp3
+[DEBUG] music_player_setup.cpp:1643 play_track() Processing path: /media/igino/IPOD DI IGI/iPod_Control/Music/F00/LWZV.mp3
+[DEBUG] music_player_setup.cpp:1651 play_track() Local path detected: /media/igino/IPOD DI IGI/iPod_Control/Music/F00/LWZV.mp3
+[DEBUG] music_player_setup.cpp:1655 play_track() Local file exists: /media/igino/IPOD DI IGI/iPod_Control/Music/F00/LWZV.mp3
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+
+(music_player:61549): Gtk-CRITICAL **: 14:43:57.801: gtk_text_buffer_emit_insert: assertion 'g_utf8_validate (text, len, NULL)' failed
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[DEBUG] music_player_setup.cpp:1599 play_track() Attempting to play track: mariposas - sangiovanni, Aitana from path: /media/igino/IPOD DI IGI/iPod_Control/Music/F00/ROKB.mp3
+[DEBUG] music_player_setup.cpp:1613 play_track() Metadata not in cache for: /media/igino/IPOD DI IGI/iPod_Control/Music/F00/ROKB.mp3, UI cleared.
+[DEBUG] music_player_setup.cpp:3526 update_db_labels() Updating DB labels for path: /media/igino/IPOD DI IGI/iPod_Control/Music/F00/ROKB.mp3
+[DEBUG] music_player_setup.cpp:3544 update_db_labels() No DB entry found for path: /media/igino/IPOD DI IGI/iPod_Control/Music/F00/ROKB.mp3
+[DEBUG] music_player_setup.cpp:1634 play_track() GStreamer pipeline reset to NULL state.
+[DEBUG] music_player_setup.cpp:1643 play_track() Processing path: /media/igino/IPOD DI IGI/iPod_Control/Music/F00/ROKB.mp3
+[DEBUG] music_player_setup.cpp:1651 play_track() Local path detected: /media/igino/IPOD DI IGI/iPod_Control/Music/F00/ROKB.mp3
+[DEBUG] music_player_setup.cpp:1655 play_track() Local file exists: /media/igino/IPOD DI IGI/iPod_Control/Music/F00/ROKB.mp3
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[INFO] music_player_setup.cpp:1070 on_folder_selected() Folder selected
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[INFO] music_player_setup.cpp:1070 on_folder_selected() Folder selected
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[DEBUG] music_player_setup.cpp:3526 update_db_labels() Updating DB labels for path: smb://192.168.188.41/media/musica/anni 50-60/Robert Maxwell/92 Shangri-La.mp3
+[DEBUG] music_player_setup.cpp:3544 update_db_labels() No DB entry found for path: smb://192.168.188.41/media/musica/anni 50-60/Robert Maxwell/92 Shangri-La.mp3
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 4
+[DEBUG] music_player_setup.cpp:1599 play_track() Attempting to play track: 92 Shangri-La.mp3 from path: smb://192.168.188.41/media/musica/anni 50-60/Robert Maxwell/92 Shangri-La.mp3
+[DEBUG] music_player_setup.cpp:3526 update_db_labels() Updating DB labels for path: smb://192.168.188.41/media/musica/anni 50-60/Robert Maxwell/92 Shangri-La.mp3
+[DEBUG] music_player_setup.cpp:3544 update_db_labels() No DB entry found for path: smb://192.168.188.41/media/musica/anni 50-60/Robert Maxwell/92 Shangri-La.mp3
+[DEBUG] music_player_setup.cpp:1634 play_track() GStreamer pipeline reset to NULL state.
+[DEBUG] music_player_setup.cpp:1643 play_track() Processing path: smb://192.168.188.41/media/musica/anni 50-60/Robert Maxwell/92 Shangri-La.mp3
+[DEBUG] music_player_setup.cpp:1651 play_track() Local path detected: smb://192.168.188.41/media/musica/anni 50-60/Robert Maxwell/92 Shangri-La.mp3
+[ERROR] music_player_setup.cpp:1657 play_track() Local file does not exist or is not accessible: smb://192.168.188.41/media/musica/anni 50-60/Robert Maxwell/92 Shangri-La.mp3
+[ERROR] music_player_setup.cpp:1672 play_track() Playback not ready for path: smb://192.168.188.41/media/musica/anni 50-60/Robert Maxwell/92 Shangri-La.mp3. Check previous errors.
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1
+[DEBUG] music_player_setup.cpp:1587 on_update_position() on_update_position called. Pipeline state: 1

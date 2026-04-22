@@ -25,13 +25,37 @@
 #include <utility>
 #include <vector>
 #include <sqlite3.h>
+#include <alsa/asoundlib.h>
 
 #include <unistd.h> // For readlink
 #include <limits.h> // For PATH_MAX
 // Richiede C++17
 namespace fs = std::filesystem;
 
-#define LOG(severity, message) std::cerr << "[" << #severity << "] " << __FILE__ << ":" << __LINE__ << " " << __FUNCTION__ << "() " << message << std::endl
+// Flag globale per il controllo del debug sulla shell
+std::atomic<bool> g_debug_enabled{true};
+
+// Helper per assicurarsi che una stringa sia UTF-8 valida per GTK
+std::string sanitize_utf8(const std::string& s) {
+    if (s.empty()) return "";
+    if (g_utf8_validate(s.c_str(), s.size(), NULL)) return s;
+    
+    gsize bytes_read, bytes_written;
+    char* converted = g_convert_with_fallback(s.c_str(), s.size(), "UTF-8", "ISO-8859-1", "?", &bytes_read, &bytes_written, NULL);
+    if (converted) {
+        std::string result(converted, bytes_written);
+        g_free(converted);
+        return result;
+    }
+    return "[Errore Codifica]";
+}
+
+#define LOG(severity, message) \
+    do { \
+        if (g_debug_enabled || #severity[0] != 'D') { \
+            std::cerr << "[" << #severity << "] " << __FILE__ << ":" << __LINE__ << " " << __FUNCTION__ << "() " << message << std::endl; \
+        } \
+    } while (0)
 
 // Nome del file di configurazione
 const std::string CONFIG_FILENAME = ".music_config";
@@ -93,6 +117,14 @@ std::string escape_for_double_quotes(const std::string& s) {
 
 std::pair<bool, std::string> exec_smb_command(const std::string& path, const SambaConfig& config, const std::string& smb_cmd) {
     std::string full_path = path;
+
+    // Normalizza il percorso: rimuove smb:, converte backslashes e assicura // iniziale
+    if (full_path.length() >= 4 && full_path.substr(0, 4) == "smb:") full_path.erase(0, 4);
+    std::replace(full_path.begin(), full_path.end(), '\\', '/');
+    size_t start_pos = full_path.find_first_not_of('/');
+    if (start_pos == std::string::npos) start_pos = 0;
+    full_path = "//" + full_path.substr(start_pos);
+
     std::string service = full_path;
     std::string directory = "";
 
@@ -350,8 +382,23 @@ struct Metadata {
 };
 
 class PlayerWindow : public Gtk::Window {
+    // Dichiarazioni dei membri riordinate per corrispondere all'ordine di inizializzazione nel costruttore
+    // Risolve i warning -Wreorder
+    std::atomic<int> m_selection_gen;
+    std::atomic<int> m_folder_selection_gen;
+    std::atomic<bool> m_stop_midi;
+    bool m_automatic_cover_search_done; // Spostato all'interno della classe
+    std::map<std::string, Metadata> m_meta_cache; // Spostato all'interno della classe
+
 public:
-    PlayerWindow() : m_pipeline(nullptr), m_scale(Gtk::ORIENTATION_HORIZONTAL), m_volume_scale(Gtk::ORIENTATION_HORIZONTAL), m_selection_gen(0), m_folder_selection_gen(0) {
+    PlayerWindow() : 
+        m_selection_gen(0), 
+        m_folder_selection_gen(0), 
+        m_stop_midi(false),
+        m_automatic_cover_search_done(false), // Inizializzato qui
+        m_pipeline(nullptr), 
+        m_scale(Gtk::ORIENTATION_HORIZONTAL), 
+        m_volume_scale(Gtk::ORIENTATION_HORIZONTAL) {
         set_title("Music Network Player");
         set_title("Music Network Player " + APP_VERSION);
         set_default_size(1024, 768);
@@ -415,6 +462,15 @@ public:
         m_btnRefresh.signal_clicked().connect(sigc::mem_fun(*this, &PlayerWindow::refresh_list));
         m_top_bar.pack_start(m_btnRefresh, Gtk::PACK_SHRINK);
 
+        m_btnDebugToggle.set_label("Debug On");
+        m_btnDebugToggle.set_active(true);
+        m_btnDebugToggle.signal_toggled().connect(sigc::mem_fun(*this, &PlayerWindow::on_debug_toggle));
+        m_top_bar.pack_start(m_btnDebugToggle, Gtk::PACK_SHRINK);
+
+        m_btnIpod.set_label("iPod");
+        m_btnIpod.signal_clicked().connect(sigc::mem_fun(*this, &PlayerWindow::on_ipod_clicked));
+        m_top_bar.pack_start(m_btnIpod, Gtk::PACK_SHRINK);
+
         m_btn_youtube.set_label("YouTube");
         m_btn_youtube.signal_clicked().connect(sigc::mem_fun(*this, &PlayerWindow::on_youtube_clicked));
         m_top_bar.pack_start(m_btn_youtube, Gtk::PACK_SHRINK);
@@ -443,6 +499,7 @@ public:
 
         m_left_container.set_orientation(Gtk::ORIENTATION_VERTICAL);
         m_main_pane.pack1(m_left_container, true, false);
+        m_left_container.set_size_request(200, -1); // Evita warning "negative content width" se il pannello è troppo piccolo
 
         m_folder_file_pane.set_orientation(Gtk::ORIENTATION_HORIZONTAL);
         m_folder_file_pane.set_homogeneous(true);
@@ -474,9 +531,12 @@ public:
         m_folder_view.signal_button_press_event().connect(sigc::mem_fun(*this, &PlayerWindow::on_folder_button_press), false);
 
         // --- Colonna 2: File (per ora, output grezzo) ---
+        m_middle_pane.set_orientation(Gtk::ORIENTATION_VERTICAL);
+        m_folder_file_pane.pack_start(m_middle_pane, Gtk::PACK_EXPAND_WIDGET);
+
         m_files_scrolled_window.set_policy(Gtk::POLICY_AUTOMATIC, Gtk::POLICY_AUTOMATIC);
         m_files_scrolled_window.add(m_files_view);
-        m_folder_file_pane.pack_start(m_files_scrolled_window, Gtk::PACK_EXPAND_WIDGET);
+        m_middle_pane.pack1(m_files_scrolled_window, true, false);
         m_files_model = Gtk::ListStore::create(m_columns);
         m_files_view.set_model(m_files_model);
         
@@ -503,6 +563,39 @@ public:
         m_files_view.get_selection()->signal_changed().connect(sigc::mem_fun(*this, &PlayerWindow::on_file_selected));
         m_files_view.signal_row_activated().connect(sigc::mem_fun(*this, &PlayerWindow::on_file_row_activated));
 
+        // Setup Drag and Drop Sorgente (Samba Files)
+        std::vector<Gtk::TargetEntry> listTargets;
+        listTargets.push_back(Gtk::TargetEntry("text/plain"));
+        m_files_view.enable_model_drag_source(listTargets, Gdk::BUTTON1_MASK, Gdk::ACTION_COPY);
+        m_files_view.signal_drag_data_get().connect(sigc::mem_fun(*this, &PlayerWindow::on_files_drag_data_get));
+
+        // --- Sezione iPod (Parte bassa Colonna 2) ---
+        m_ipod_scrolled_window.set_policy(Gtk::POLICY_AUTOMATIC, Gtk::POLICY_AUTOMATIC);
+        m_ipod_model = Gtk::ListStore::create(m_columns);
+        m_ipod_view.set_model(m_ipod_model);
+        auto pColIpod = Gtk::manage(new Gtk::TreeViewColumn("Contenuto iPod"));
+        auto pRenIconIpod = Gtk::manage(new Gtk::CellRendererPixbuf());
+        auto pRenTextIpod = Gtk::manage(new Gtk::CellRendererText());
+        pColIpod->pack_start(*pRenIconIpod, false);
+        pColIpod->pack_start(*pRenTextIpod, true);
+        pColIpod->add_attribute(pRenIconIpod->property_icon_name(), m_columns.m_col_icon);
+        pColIpod->add_attribute(pRenTextIpod->property_text(), m_columns.m_col_name);
+        m_ipod_view.append_column(*pColIpod);
+        m_ipod_scrolled_window.add(m_ipod_view);
+        m_ipod_model->set_sort_column(m_columns.m_col_name, Gtk::SORT_ASCENDING);
+        m_ipod_view.get_selection()->set_mode(Gtk::SELECTION_MULTIPLE);
+        m_ipod_view.signal_button_press_event().connect(sigc::mem_fun(*this, &PlayerWindow::on_ipod_button_press), false);
+        m_ipod_view.signal_row_activated().connect(sigc::mem_fun(*this, &PlayerWindow::on_ipod_row_activated));
+        m_ipod_view.get_selection()->signal_changed().connect(sigc::mem_fun(*this, &PlayerWindow::on_ipod_selected));
+        m_middle_pane.pack2(m_ipod_scrolled_window, true, false);
+        m_middle_pane.set_position(400); // Divisione iniziale
+
+        // Setup Drag and Drop Destinazione (iPod View)
+        std::vector<Gtk::TargetEntry> destTargets;
+        destTargets.push_back(Gtk::TargetEntry("text/plain"));
+        m_ipod_view.enable_model_drag_dest(destTargets, Gdk::ACTION_COPY);
+        m_ipod_view.signal_drag_data_received().connect(sigc::mem_fun(*this, &PlayerWindow::on_ipod_drag_data_received));
+
         // --- Colonna DB ---
         m_db_scrolled_window.set_policy(Gtk::POLICY_AUTOMATIC, Gtk::POLICY_AUTOMATIC);
         m_db_scrolled_window.add(m_db_view);
@@ -511,30 +604,55 @@ public:
         
         // Configurazione Colonne DB
         m_db_view.append_column("Artista", m_columns.m_col_artist);
-        m_db_view.get_column(0)->set_sort_column(m_columns.m_col_artist);
-        m_db_view.get_column(0)->set_resizable(true);
+        auto* col_artist = m_db_view.get_column(0);
+        col_artist->set_sort_column(m_columns.m_col_artist);
+        col_artist->set_resizable(true);
+        col_artist->set_sizing(Gtk::TREE_VIEW_COLUMN_FIXED);
+        col_artist->set_fixed_width(50);
+        col_artist->set_expand(true);
 
         m_db_view.append_column("Titolo", m_columns.m_col_title);
-        m_db_view.get_column(1)->set_sort_column(m_columns.m_col_title);
-        m_db_view.get_column(1)->set_resizable(true);
+        auto* col_title = m_db_view.get_column(1);
+        col_title->set_sort_column(m_columns.m_col_title);
+        col_title->set_resizable(true);
+        col_title->set_sizing(Gtk::TREE_VIEW_COLUMN_FIXED);
+        col_title->set_fixed_width(50);
+        col_title->set_expand(true);
 
         m_db_view.append_column("Album", m_columns.m_col_album);
-        m_db_view.get_column(2)->set_sort_column(m_columns.m_col_album);
-        m_db_view.get_column(2)->set_resizable(true);
+        auto* col_album = m_db_view.get_column(2);
+        col_album->set_sort_column(m_columns.m_col_album);
+        col_album->set_resizable(true);
+        col_album->set_sizing(Gtk::TREE_VIEW_COLUMN_FIXED);
+        col_album->set_fixed_width(50);
+        col_album->set_expand(true);
 
         m_db_view.append_column("Anno", m_columns.m_col_year);
-        m_db_view.get_column(3)->set_sort_column(m_columns.m_col_year);
-        m_db_view.get_column(3)->set_resizable(true);
+        auto* col_year = m_db_view.get_column(3);
+        col_year->set_sort_column(m_columns.m_col_year);
+        col_year->set_resizable(true);
+        col_year->set_sizing(Gtk::TREE_VIEW_COLUMN_FIXED);
+        col_year->set_fixed_width(50);
+        col_year->set_expand(true);
 
         m_db_view.append_column("Genere", m_columns.m_col_genre);
-        m_db_view.get_column(4)->set_sort_column(m_columns.m_col_genre);
-        m_db_view.get_column(4)->set_resizable(true);
+        auto* col_genre = m_db_view.get_column(4);
+        col_genre->set_sort_column(m_columns.m_col_genre);
+        col_genre->set_resizable(true);
+        col_genre->set_sizing(Gtk::TREE_VIEW_COLUMN_FIXED);
+        col_genre->set_fixed_width(50);
+        col_genre->set_expand(true);
 
         m_db_view.append_column("Directory", m_columns.m_col_path);
-        m_db_view.get_column(5)->set_sort_column(m_columns.m_col_path);
-        m_db_view.get_column(5)->set_resizable(true);
+        auto* col_path = m_db_view.get_column(5);
+        col_path->set_sort_column(m_columns.m_col_path);
+        col_path->set_resizable(true);
+        col_path->set_sizing(Gtk::TREE_VIEW_COLUMN_FIXED);
+        col_path->set_fixed_width(50);
+        col_path->set_expand(true);
 
         m_db_view.signal_row_activated().connect(sigc::mem_fun(*this, &PlayerWindow::on_db_row_activated));
+        m_db_view.get_selection()->set_mode(Gtk::SELECTION_MULTIPLE); // Abilita selezione multipla
         m_db_model->set_sort_column(m_columns.m_col_artist, Gtk::SORT_ASCENDING);
         m_db_model->signal_sort_column_changed().connect(sigc::mem_fun(*this, &PlayerWindow::on_db_sort_changed));
 
@@ -546,7 +664,7 @@ public:
 
         // --- Colonna 3: Placeholder ---
         m_col3_scrolled_window.set_policy(Gtk::POLICY_AUTOMATIC, Gtk::POLICY_AUTOMATIC);
-        
+        m_col3_scrolled_window.set_size_request(320, -1); // Minima larghezza per i controlli
         m_col3_box.set_orientation(Gtk::ORIENTATION_VERTICAL);
         m_col3_box.set_spacing(10);
         m_col3_scrolled_window.add(m_col3_box);
@@ -579,13 +697,35 @@ public:
         m_metadata_grid.attach(m_lbl_genre, 0, 4, 1, 1);
         m_metadata_grid.attach(m_entry_genre, 1, 4, 1, 1);
 
+        // Etichette per visualizzare i valori nel DB (solo lettura)
+        auto set_db_lbl_style = [](Gtk::Label& lbl) {
+            lbl.set_halign(Gtk::ALIGN_START);
+            lbl.set_ellipsize(Pango::ELLIPSIZE_END);
+            lbl.set_opacity(0.6); // Leggermente sbiadito per distinguerlo
+        };
+        set_db_lbl_style(m_lbl_db_artist); m_metadata_grid.attach(m_lbl_db_artist, 2, 0, 1, 1);
+        set_db_lbl_style(m_lbl_db_title);  m_metadata_grid.attach(m_lbl_db_title, 2, 1, 1, 1);
+        set_db_lbl_style(m_lbl_db_album);  m_metadata_grid.attach(m_lbl_db_album, 2, 2, 1, 1);
+        set_db_lbl_style(m_lbl_db_year);   m_metadata_grid.attach(m_lbl_db_year, 2, 3, 1, 1);
+        set_db_lbl_style(m_lbl_db_genre);  m_metadata_grid.attach(m_lbl_db_genre, 2, 4, 1, 1);
+        m_metadata_grid.set_column_spacing(10); // Spazio tra campi input e valori DB
+
         m_btn_search_online.set_label("Cerca Online");
         m_btn_search_online.signal_clicked().connect(sigc::mem_fun(*this, &PlayerWindow::on_search_online_clicked));
         m_metadata_grid.attach(m_btn_search_online, 0, 5, 2, 1);
 
+        m_save_buttons_box.set_orientation(Gtk::ORIENTATION_HORIZONTAL);
+        m_save_buttons_box.set_spacing(5);
+
         m_btn_save_metadata.set_label("Salva Metadati");
         m_btn_save_metadata.signal_clicked().connect(sigc::mem_fun(*this, &PlayerWindow::on_save_metadata_clicked));
-        m_metadata_grid.attach(m_btn_save_metadata, 0, 6, 2, 1);
+        m_save_buttons_box.pack_start(m_btn_save_metadata, Gtk::PACK_EXPAND_WIDGET);
+
+        m_btn_save_db_only.set_label("Salva solo DB");
+        m_btn_save_db_only.signal_clicked().connect(sigc::mem_fun(*this, &PlayerWindow::on_save_db_only_clicked));
+        m_save_buttons_box.pack_start(m_btn_save_db_only, Gtk::PACK_EXPAND_WIDGET);
+        
+        m_metadata_grid.attach(m_save_buttons_box, 0, 6, 2, 1);
 
         m_btn_recognize.set_label("Invia a SongRep");
         m_btn_recognize.signal_clicked().connect(sigc::mem_fun(*this, &PlayerWindow::on_recognize_clicked));
@@ -643,6 +783,7 @@ public:
         m_scan_progress_bar.hide();
         m_db_scrolled_window.hide();
         m_audio_controls_box.hide(); // Nascondi controlli audio all'avvio
+        m_btn_save_db_only.hide(); // Nascondi pulsante DB all'avvio (siamo in vista file)
 
         // Controlla la config all'avvio
         if (!loadConfig(m_config)) {
@@ -656,14 +797,26 @@ public:
         m_col3_box.show_all();
         
         load_meta_cache();
-        
+
         Glib::signal_timeout().connect(sigc::mem_fun(*this, &PlayerWindow::on_update_position), 500);
+
+        // Setup MIDI Dispatchers per thread-safety
+        m_dispatcher_play.connect(sigc::mem_fun(*this, &PlayerWindow::on_play_clicked));
+        m_dispatcher_pause.connect(sigc::mem_fun(*this, &PlayerWindow::on_pause_clicked));
+        m_dispatcher_stop.connect(sigc::mem_fun(*this, &PlayerWindow::on_stop_clicked));
+        m_dispatcher_next.connect(sigc::mem_fun(*this, &PlayerWindow::on_next_track));
+
+        // Avvia il thread di ascolto MIDI per Hercules
+        m_midi_thread = std::thread(&PlayerWindow::midi_listener_thread, this);
     }
 
     ~PlayerWindow() override {
         m_stop_scan = true;
         if (m_scan_thread.joinable()) m_scan_thread.join();
-
+        
+        m_stop_midi = true;
+        if (m_midi_thread.joinable()) m_midi_thread.join();
+        
         save_meta_cache();
         if (m_pipeline) {
             gst_element_set_state(m_pipeline, GST_STATE_NULL);
@@ -674,11 +827,156 @@ public:
         }
     }
 
+    void midi_listener_thread() {
+        snd_seq_t *seq;
+        if (snd_seq_open(&seq, "default", SND_SEQ_OPEN_INPUT, 0) < 0) {
+            LOG(ERROR, "Could not open ALSA sequencer. MIDI support disabled.");
+            return;
+        }
+        
+        snd_seq_set_client_name(seq, "MusicPlayer-MIDI-Listener"); // Nome del client MIDI
+        int my_port = snd_seq_create_simple_port(seq, "Input", // Creazione di una porta MIDI semplice
+            SND_SEQ_PORT_CAP_WRITE | SND_SEQ_PORT_CAP_SUBS_WRITE,
+            SND_SEQ_PORT_TYPE_MIDI_GENERIC);
+
+        LOG(INFO, "MIDI Listener started as client " << snd_seq_client_id(seq));
+
+        // --- Auto-connessione alla Hercules DJCONTROL MIX ---
+        snd_seq_client_info_t *cinfo;
+        snd_seq_client_info_alloca(&cinfo);
+        snd_seq_client_info_set_client(cinfo, -1);
+        
+        bool connected = false;
+        while (snd_seq_query_next_client(seq, cinfo) >= 0) {
+            std::string name = snd_seq_client_info_get_name(cinfo);
+            if (name.find("DJCONTROL MIX") != std::string::npos) {
+                int hercules_id = snd_seq_client_info_get_client(cinfo);
+                
+                snd_seq_port_info_t *pinfo;
+                snd_seq_port_info_alloca(&pinfo);
+                snd_seq_port_info_set_client(pinfo, hercules_id);
+                snd_seq_port_info_set_port(pinfo, -1);
+                
+                if (snd_seq_query_next_port(seq, pinfo) >= 0) {
+                    int hercules_port = snd_seq_port_info_get_port(pinfo);
+                    if (snd_seq_connect_from(seq, my_port, hercules_id, hercules_port) == 0) {
+                        LOG(INFO, "Successfully auto-connected to " << name << " (Client " << hercules_id << ")");
+                        connected = true;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        if (!connected) {
+            LOG(WARNING, "Hercules DJCONTROL MIX not found or could not connect. Please check cables.");
+        } else {
+            LOG(INFO, "MIDI Ready. Press buttons on your Hercules!");
+        }
+
+        snd_seq_event_t *ev;
+        while (!m_stop_midi) {
+            if (snd_seq_event_input_pending(seq, 1) > 0) {
+                snd_seq_event_input(seq, &ev);
+                
+                // Mapping codici Hercules (Esempio standard DJControl Inpulse)
+                if (ev->type == SND_SEQ_EVENT_NOTEON && ev->data.note.velocity == 0) {
+                    snd_seq_free_event(ev);
+                    continue; // Ignora il rilascio del tasto
+                }
+
+                if (ev->type == SND_SEQ_EVENT_NOTEON) {
+                    int note = ev->data.note.note;
+                    LOG(DEBUG, "MIDI Note: " << note);
+                    switch(note) {
+                        case 7: { // Tasto Play/Pause della DJCONTROL MIX
+                            GstState state = GST_STATE_NULL;
+                            GstState pending = GST_STATE_NULL;
+                            if (m_pipeline) {
+                                gst_element_get_state(m_pipeline, &state, &pending, 0);
+                            }
+                            // Se sta riproducendo o sta per farlo, mettiamo in pausa
+                            if (state == GST_STATE_PLAYING || pending == GST_STATE_PLAYING) {
+                                m_dispatcher_pause.emit();
+                            } else {
+                                m_dispatcher_play.emit();
+                            }
+                            break;
+                        }
+                        case 12: // Tipico tasto Play Deck A
+                            m_dispatcher_play.emit();
+                            break;
+                        case 11: // Tipico tasto Cue/Pause
+                            m_dispatcher_pause.emit();
+                            break;
+                        case 14: // Tasto Sync o Next
+                            m_dispatcher_next.emit();
+                            break;
+                    }
+                } 
+                else if (ev->type == SND_SEQ_EVENT_CONTROLLER) {
+                    int param = ev->data.control.param;
+                    int value = ev->data.control.value; // 0-127
+                    LOG(DEBUG, "MIDI CC: " << param << " Value: " << value);
+
+                    // Mapping per DJCONTROL MIX: 3 (Master), 8 (Deck 1), 9 (Deck 2)
+                    if (param == 7 || param == 23 || param == 3 || param == 8 || param == 9) { 
+                        double vol = (double)value / 127.0 * 100.0;
+                        // Collega l'aggiornamento del volume con una priorità più alta
+                        // per una maggiore reattività.
+                        Glib::signal_idle().connect(
+                            sigc::bind(sigc::mem_fun(*this, &PlayerWindow::set_volume_scale_value_from_midi), vol),
+                            Glib::PRIORITY_HIGH_IDLE
+                        );
+                    }
+                    else if (param == 33) { // Jog Wheel (Esempio seeking)
+                        if (m_pipeline) {
+                            Glib::signal_idle().connect([this, value]() {
+                                double current = m_scale.get_value();
+                                // Determina direzione dalla variazione (logica semplificata)
+                                if (value > 64) m_scale.set_value(current + 2);
+                                else m_scale.set_value(current - 2);
+                                return false;
+                            });
+                        }
+                    }
+                    else if (param == 10) { // Jog Wheel FWD/REV (DJCONTROL MIX)
+                        if (m_pipeline) {
+                            Glib::signal_idle().connect([this, value]() {
+                                double current = m_scale.get_value();
+                                // Value 1: Rotazione Oraria (FWD+), Value 127: Rotazione Antioraria (REV-)
+                                if (value == 1) m_scale.set_value(current + 2);
+                                else if (value == 127) m_scale.set_value(current - 2);
+                                return false;
+                            });
+                        }
+                    }
+                }
+                snd_seq_free_event(ev);
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        snd_seq_close(seq);
+    }
+
+    // Funzione helper per aggiornare il valore della scala del volume dal thread MIDI
+    // Viene chiamata tramite Glib::signal_idle con alta priorità.
+    bool set_volume_scale_value_from_midi(double vol_value) {
+        m_volume_scale.set_value(vol_value);
+        return false; // Indica che il callback deve essere eseguito una sola volta
+    }
+
+    void on_debug_toggle() {
+        g_debug_enabled = m_btnDebugToggle.get_active();
+        m_btnDebugToggle.set_label(g_debug_enabled ? "Debug On" : "Debug Off");
+    }
+
     void on_db_view_toggled() {
         m_db_view_active = !m_db_view_active;
         if (m_db_view_active) {
             m_folder_file_pane.hide();
             m_db_scrolled_window.show();
+            m_btn_save_db_only.show();
             m_btnDB.set_label("Cartelle");
 
             // Popola la vista DB dal database SQLite
@@ -686,7 +984,9 @@ public:
         } else {
             m_db_scrolled_window.hide();
             m_folder_file_pane.show();
+            m_btn_save_db_only.hide();
             m_btnDB.set_label("DB");
+            m_scan_status_label.set_text("");
         }
     }
 
@@ -835,6 +1135,153 @@ public:
         close();
     }
 
+    void on_ipod_clicked() {
+        Gtk::FileChooserDialog dialog(*this, "Seleziona Dispositivo iPod", Gtk::FILE_CHOOSER_ACTION_SELECT_FOLDER);
+        dialog.add_button("Annulla", Gtk::RESPONSE_CANCEL);
+        dialog.add_button("Apri", Gtk::RESPONSE_OK);
+
+        if (dialog.run() == Gtk::RESPONSE_OK) {
+            m_current_ipod_path = dialog.get_filename();
+            load_ipod_content(m_current_ipod_path);
+        }
+    }
+
+    void load_ipod_content(const std::string& path) {
+        if (path.empty()) {
+            m_ipod_model->clear();
+            return;
+        }
+        m_ipod_model->clear();
+        
+        m_scan_status_label.set_text("Lettura iPod...");
+        std::string ipod_path = path;
+
+        std::thread([this, ipod_path]() {
+            struct Item { std::string path; std::string filename; bool is_dir; };
+            std::vector<Item> items_to_add;
+
+            auto check_ext = [](const std::string& name) {
+                std::string ext = fs::path(name).extension().string();
+                std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                return (ext == ".mp3" || ext == ".m4a" || ext == ".wav" || ext == ".flac" || ext == ".ogg");
+            };
+
+            try {
+                // 1. Scansione della root (canzoni aggiunte manualmente o file sparsi)
+                for (const auto& entry : fs::directory_iterator(ipod_path)) {
+                    std::string name = entry.path().filename().string();
+                    if (name.empty() || name[0] == '.') continue;
+                    if (entry.is_directory()) {
+                        if (name != "iPod_Control") items_to_add.push_back({entry.path().string(), name, true});
+                    } else if (check_ext(name)) {
+                        items_to_add.push_back({entry.path().string(), name, false});
+                    }
+                }
+
+                // 2. Scansione struttura standard iPod (F00, F01, ecc.)
+                fs::path ipod_music_path = fs::path(ipod_path) / "iPod_Control" / "Music";
+                if (fs::exists(ipod_music_path) && fs::is_directory(ipod_music_path)) {
+                    for (const auto& entry : fs::directory_iterator(ipod_music_path)) {
+                        if (entry.is_directory() && entry.path().filename().string().rfind("F", 0) == 0) {
+                            for (const auto& music_entry : fs::directory_iterator(entry.path())) {
+                                std::string name = music_entry.path().filename().string();
+                                if (!name.empty() && name[0] != '.' && check_ext(name)) items_to_add.push_back({music_entry.path().string(), name, false});
+                            }
+                        }
+                    }
+                }
+
+                for (const auto& item : items_to_add) {
+                    std::string display_name = item.filename;
+                    if (!item.is_dir) {
+                        Metadata meta = extract_metadata_internal(item.path);
+                        if (!meta.title.empty()) {
+                            display_name = (meta.artist.empty() ? "" : meta.artist + " - ") + meta.title;
+                        }
+                    }
+
+                    Glib::signal_idle().connect([this, display_name, item]() {
+                        Gtk::TreeModel::Row row = *(m_ipod_model->append());
+                        set_row_style(row, item.filename, item.is_dir); // Icona basata sul file reale
+                        row[m_columns.m_col_name] = sanitize_utf8(display_name);      // Testo basato sui metadati
+                        row[m_columns.m_col_path] = item.path;
+                        return false;
+                    });
+                }
+            } catch (const std::exception& e) {
+                LOG(ERROR, "Errore iPod: " << e.what());
+            }
+
+            Glib::signal_idle().connect([this]() { m_scan_status_label.set_text(""); return false; });
+        }).detach();
+    }
+
+    void on_ipod_row_activated(const Gtk::TreeModel::Path& path, Gtk::TreeViewColumn*) {
+        auto iter = m_ipod_model->get_iter(path);
+        if (iter) play_track(iter, m_ipod_model);
+    }
+
+    void on_ipod_selected() {
+        on_item_selected(m_ipod_view.get_selection());
+    }
+
+    void on_files_drag_data_get(const Glib::RefPtr<Gdk::DragContext>&, Gtk::SelectionData& selection_data, guint, guint) {
+        auto iter = m_files_view.get_selection()->get_selected();
+        if (iter) {
+            Glib::ustring path = (*iter)[m_columns.m_col_path];
+            selection_data.set_text(path);
+        }
+    }
+
+    void on_ipod_drag_data_received(const Glib::RefPtr<Gdk::DragContext>& context, int, int, const Gtk::SelectionData& selection_data, guint, guint time) {
+        Glib::ustring smb_path = selection_data.get_text();
+        
+        if (smb_path.empty() || m_current_ipod_path.empty()) {
+            context->drag_finish(false, false, time);
+            return;
+        }
+
+        std::string smb_path_str = (std::string)smb_path;
+        std::string filename = fs::path(smb_path_str).filename().string();
+        
+        // Destinazione: se è un iPod reale, mettiamo in F00 per compatibilità hardware
+        std::string local_dest;
+        fs::path ipod_f00 = fs::path(m_current_ipod_path) / "iPod_Control" / "Music" / "F00";
+        if (fs::exists(ipod_f00)) {
+            local_dest = (ipod_f00 / filename).string();
+        } else {
+            local_dest = m_current_ipod_path + "/" + filename;
+        }
+
+        // Avviamo il download in un thread per non bloccare la UI durante la copia SMB
+        m_scan_status_label.set_text("Copia in corso: " + filename + "...");
+        
+        std::thread([this, smb_path, local_dest, context, time]() {
+            bool success = download_smb_file(smb_path, local_dest, m_config);
+            bool is_ipod_shuffle = fs::exists(fs::path(m_current_ipod_path) / "iPod_Control");
+            
+            Glib::signal_idle().connect([this, success, context, time, is_ipod_shuffle]() {
+                context->drag_finish(success, false, time);
+                if (success) {
+                    m_scan_status_label.set_text("Copia completata.");
+                    if (is_ipod_shuffle) {
+                        Gtk::MessageDialog note(*this, "File copiato sull'iPod", false, Gtk::MESSAGE_INFO, Gtk::BUTTONS_OK);
+                        note.set_secondary_text("L'iPod Shuffle richiede l'aggiornamento del database interno per riprodurre i brani senza PC.\n\n"
+                                                "Puoi ascoltare i brani tramite questa app, ma per l'uso standalone dovrai usare iTunes o uno strumento come 'Rhythmbox' (con il plugin iPod abilitato) per sincronizzare il database.");
+                        note.run();
+                    }
+                    load_ipod_content(m_current_ipod_path);
+                } else {
+                    m_scan_status_label.set_text("Errore durante la copia.");
+                    Gtk::MessageDialog dlg(*this, "Errore nella copia del file sul dispositivo.", 
+                                         false, Gtk::MESSAGE_ERROR, Gtk::BUTTONS_OK);
+                    dlg.run();
+                }
+                return false;
+            });
+        }).detach();
+    }
+
     void on_config_clicked() {
         LOG(INFO, "Config button clicked");
         ConfigDialog dlg(*this, m_config);
@@ -961,7 +1408,10 @@ public:
     }
 
     void on_file_selected() {
-        auto selection = m_files_view.get_selection();
+        on_item_selected(m_files_view.get_selection());
+    }
+
+    void on_item_selected(Glib::RefPtr<Gtk::TreeSelection> selection) {
         auto iter = selection->get_selected();
         
         // Reset UI immediately
@@ -980,6 +1430,12 @@ public:
         m_val_samplerate.set_text("");
         m_val_size.set_text("");
 
+        m_lbl_db_artist.set_text("");
+        m_lbl_db_title.set_text("");
+        m_lbl_db_album.set_text("");
+        m_lbl_db_year.set_text("");
+        m_lbl_db_genre.set_text("");
+
         // Pulisci eventuale copertina temporanea precedente
         if (fs::exists(get_cache_dir() + "/temp_cover.jpg")) {
             fs::remove("/tmp/temp_cover.jpg");
@@ -990,71 +1446,87 @@ public:
             Glib::ustring name = row[m_columns.m_col_name];
             Glib::ustring path = row[m_columns.m_col_path];
             
-          int gen = ++m_selection_gen;
+            if (path.empty()) return;
+            std::string path_str = (std::string)path;
+            
+            int gen = ++m_selection_gen;
 
             std::string ext = "";
-            size_t dot_pos = name.find_last_of('.');
-            if (dot_pos != std::string::npos) ext = name.substr(dot_pos);
+            size_t dot_pos = path_str.find_last_of('.');
+            if (dot_pos != std::string::npos) ext = path_str.substr(dot_pos);
             std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
             if (ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".gif" || ext == ".bmp") {
+                if (path_str.find("//") != 0 && path_str.find("smb:") != 0) { // Locale (iPod)
+                    display_image(path_str);
+                    return;
+                }
+                // Remoto (Samba)
                 std::string cache_path = get_hashed_path(path, ext);
                 if (fs::exists(cache_path)) {
                     display_image(cache_path);
                 } else {
-                    std::thread([this, path, cache_path, gen]() {
-                        if (download_smb_file(path, cache_path, m_config)) {
+                    std::thread([this, path_str, cache_path, gen]() {
+                        if (download_smb_file(path_str, cache_path, m_config)) {
                             Glib::signal_idle().connect([this, cache_path, gen]() {
-                                if (m_selection_gen == gen) {
-                                    display_image(cache_path);
-                                }
+                                if (m_selection_gen == gen) display_image(cache_path);
                                 return false;
                             });
                         }
                     }).detach();
                 }
             } else if (ext == ".mp3" || ext == ".wav" || ext == ".flac" || ext == ".ogg" || ext == ".m4a") {
-                bool need_extract = true;
-                if (m_meta_cache.count((std::string)path)) {
-                    Metadata meta = m_meta_cache[(std::string)path];
+                bool need_extract = true; 
+                if (m_meta_cache.count(path_str)) {
+                    Metadata meta = m_meta_cache[path_str];
                     if (meta.size_mb > 0.0) {
                         update_metadata_ui(meta);
                         need_extract = false;
                     }
                 }
                 if (need_extract) {
-                    std::thread([this, path, ext, gen]() {
-                        std::string temp_path = "/tmp/metadata_preview_" + std::to_string(gen) + ext;
-                        if (download_smb_file(path, temp_path, m_config)) {
-                            Metadata meta = extract_metadata_internal(temp_path);
-                            Glib::signal_idle().connect([this, meta, path, gen]() {
-                                if (m_selection_gen == gen) {
-                                    // Gestione cache copertina
-                                    Metadata final_meta = meta;
-                                    if (!final_meta.coverPath.empty() && fs::exists(final_meta.coverPath)) {
-                                        std::string cache_cover = get_hashed_path(path, ".jpg");
-                                        // Sposta o sovrascrivi in cache
-                                        fs::copy_file(final_meta.coverPath, cache_cover, fs::copy_options::overwrite_existing);
-                                        fs::remove(final_meta.coverPath);
-                                        final_meta.coverPath = cache_cover;
-                                    }
-                                    
-                                    update_metadata_ui(final_meta);
-                                    m_meta_cache[(std::string)path] = final_meta;
-                                }
-                                return false;
-                            });
-                            fs::remove(temp_path);
+                    std::thread([this, path_str, ext, gen]() {
+                        std::string process_path;
+                        bool is_remote = (path_str.find("//") == 0 || path_str.find("smb:") == 0);
+
+                        if (is_remote) {
+                            process_path = "/tmp/metadata_preview_" + std::to_string(gen) + ext;
+                            if (!download_smb_file(path_str, process_path, m_config)) return;
+                        } else {
+                            process_path = path_str;
                         }
+
+                        Metadata meta = extract_metadata_internal(process_path);
+                        
+                        Glib::signal_idle().connect([this, meta, path_str, gen, is_remote, process_path]() {
+                            if (m_selection_gen == gen) {
+                                Metadata final_meta = meta;
+                                // Se remoto, salviamo la cover estratta nella cache locale
+                                if (is_remote && !final_meta.coverPath.empty() && fs::exists(final_meta.coverPath)) {
+                                    std::string cache_cover = get_hashed_path(path_str, ".jpg");
+                                    fs::copy_file(final_meta.coverPath, cache_cover, fs::copy_options::overwrite_existing);
+                                    fs::remove(final_meta.coverPath);
+                                    final_meta.coverPath = cache_cover;
+                                }
+                                
+                                update_metadata_ui(final_meta);
+                                m_meta_cache[path_str] = final_meta;
+                                update_db_labels(path_str);
+                            }
+                            if (is_remote && fs::exists(process_path)) fs::remove(process_path);
+                            return false;
+                        });
                     }).detach();
                 }
             } else {
-                std::string cache_path = get_hashed_path(path, ext);
+                if (path_str.find("//") != 0 && path_str.find("smb:") != 0) { display_text(path_str); return; }
+                
+                std::string cache_path = get_hashed_path(path_str, ext);
                 if (fs::exists(cache_path)) {
                     display_text(cache_path);
                 } else {
-                    std::thread([this, path, cache_path, gen]() {
-                        if (download_smb_file(path, cache_path, m_config)) {
+                    std::thread([this, path_str, cache_path, gen]() {
+                        if (download_smb_file(path_str, cache_path, m_config)) {
                             Glib::signal_idle().connect([this, cache_path, gen]() {
                                 if (m_selection_gen == gen) {
                                     display_text(cache_path);
@@ -1072,6 +1544,7 @@ public:
         try { 
             auto pixbuf = Gdk::Pixbuf::create_from_file(path);
             int width = m_col3_scrolled_window.get_allocation().get_width();
+            if (width <= 20) width = 300; // Fallback se allocazione non ancora avvenuta
             if (width > 20) {
                 int new_width = width - 20;
                 int new_height = (pixbuf->get_height() * new_width) / pixbuf->get_width();
@@ -1136,7 +1609,7 @@ public:
             std::ifstream file(path);
             std::stringstream buffer;
             buffer << file.rdbuf();
-            m_text_view.get_buffer()->set_text(buffer.str());
+            m_text_view.get_buffer()->set_text(sanitize_utf8(buffer.str()));
             m_text_view.show();
         } catch(...) {}
     }
@@ -1144,11 +1617,11 @@ public:
     void update_metadata_ui(const Metadata& meta) {
         m_audio_controls_box.show();
         m_info_hbox.show_all();
-        m_entry_artist.set_text(meta.artist);
-        m_entry_title.set_text(meta.title);
-        m_entry_album.set_text(meta.album);
-        m_entry_year.set_text(meta.year);
-        m_entry_genre.set_text(meta.genre);
+        m_entry_artist.set_text(sanitize_utf8(meta.artist));
+        m_entry_title.set_text(sanitize_utf8(meta.title));
+        m_entry_album.set_text(sanitize_utf8(meta.album));
+        m_entry_year.set_text(sanitize_utf8(meta.year));
+        m_entry_genre.set_text(sanitize_utf8(meta.genre));
 
         if (!meta.artist.empty() && !meta.title.empty()) {
             set_title(meta.artist + " - " + meta.title);
@@ -1228,7 +1701,7 @@ public:
         }
     }
 
-    void on_file_row_activated(const Gtk::TreeModel::Path& path, Gtk::TreeViewColumn* /*column*/) {
+    void on_file_row_activated(const Gtk::TreeModel::Path& path, Gtk::TreeViewColumn*) {
         auto iter = m_files_model->get_iter(path);
         if (!iter) return;
         Gtk::TreeModel::Row row = *iter;
@@ -1249,7 +1722,7 @@ public:
                 }
             }
         } else {
-            play_track(iter);
+            play_track(iter, m_files_model);
         }
     }
 
@@ -1267,8 +1740,26 @@ public:
                             on_next_track();
                             break;
                         case GST_MESSAGE_ERROR:
-                            // Handle error
-                            break;
+                {
+                    GError *err = NULL;
+                    gchar *debug_info = NULL;
+                    gst_message_parse_error(msg, &err, &debug_info);
+                    LOG(ERROR, "GStreamer error received from element " << GST_OBJECT_NAME(msg->src) << ": " << err->message);
+                    if (debug_info) {
+                        LOG(ERROR, "Debugging info: " << debug_info);
+                    }
+                    g_clear_error(&err);
+                    g_free(debug_info);
+                    // Optionally, stop playback or show an error dialog
+                    on_stop_clicked(); // Stop playback on error
+                    Glib::signal_idle().connect([this, error_msg = std::string(err ? err->message : "Unknown GStreamer error")]() {
+                        Gtk::MessageDialog dlg(*this, "Errore GStreamer", false, Gtk::MESSAGE_ERROR, Gtk::BUTTONS_OK);
+                        dlg.set_secondary_text("Si è verificato un errore durante la riproduzione: " + error_msg);
+                        dlg.run();
+                        return false;
+                    });
+                    break;
+                }
                         case GST_MESSAGE_TAG: {
                             GstTagList *tags = nullptr;
                             gst_message_parse_tag(msg, &tags);
@@ -1276,15 +1767,16 @@ public:
                             
                             // Aggiorna cache durante la riproduzione
                             if (m_current_track_row.is_valid()) {
-                                auto iter = m_files_model->get_iter(m_current_track_row.get_path());
+                                auto model = m_current_track_row.get_model();
+                                auto iter = model->get_iter(m_current_track_row.get_path());
                                 if (iter) {
                                     Glib::ustring path = (*iter)[m_columns.m_col_path];
                                     Metadata meta;
-                                    meta.artist = m_entry_artist.get_text();
-                                    meta.title = m_entry_title.get_text();
-                                    meta.album = m_entry_album.get_text();
-                                    meta.year = m_entry_year.get_text();
-                                    meta.genre = m_entry_genre.get_text();
+                            meta.artist = sanitize_utf8(m_entry_artist.get_text());
+                            meta.title = sanitize_utf8(m_entry_title.get_text());
+                            meta.album = sanitize_utf8(m_entry_album.get_text());
+                            meta.year = sanitize_utf8(m_entry_year.get_text());
+                            meta.genre = sanitize_utf8(m_entry_genre.get_text());
                                     // Preserve tech info
                                     if (m_meta_cache.count((std::string)path)) {
                                         auto& old = m_meta_cache[(std::string)path];
@@ -1315,19 +1807,23 @@ public:
                 m_time_label.set_text(format_time(pos / GST_SECOND) + " / " + format_time(len / GST_SECOND));
             }
         }
+        GstState state = GST_STATE_NULL;
+        if (m_pipeline) gst_element_get_state(m_pipeline, &state, NULL, 0);
+        LOG(DEBUG, "on_update_position called. Pipeline state: " << state);
         return true;
     }
 
-    void play_track(const Gtk::TreeModel::iterator& iter) {
+    void play_track(const Gtk::TreeModel::iterator& iter, Glib::RefPtr<Gtk::TreeModel> model) {
         if (!iter) return;
         Gtk::TreeModel::Row row = *iter;
         Glib::ustring name = row[m_columns.m_col_name];
-        Glib::ustring smb_path = row[m_columns.m_col_path];
-
+        Glib::ustring path_val = row[m_columns.m_col_path];
+        m_automatic_cover_search_done = false;
         set_title(name);
+        LOG(DEBUG, "Attempting to play track: " << name << " from path: " << path_val);
 
-        if (m_meta_cache.count((std::string)smb_path)) {
-            update_metadata_ui(m_meta_cache[(std::string)smb_path]);
+        if (m_meta_cache.count((std::string)path_val)) {
+            update_metadata_ui(m_meta_cache[(std::string)path_val]);
         } else {
             m_entry_artist.set_text("");
             m_entry_title.set_text("");
@@ -1338,11 +1834,20 @@ public:
             m_val_codec.set_text("");
             m_val_samplerate.set_text("");
             m_val_size.set_text("");
+            LOG(DEBUG, "Metadata not in cache for: " << path_val << ", UI cleared.");
         }
+        update_db_labels(path_val);
 
         std::string ext = "";
         size_t dot_pos = name.find_last_of('.');
         if (dot_pos != std::string::npos) ext = name.substr(dot_pos);
+        // Ensure ext starts with a dot if it's not empty
+        if (!ext.empty() && ext[0] != '.') {
+            ext = "." + ext;
+        }
+        // Fallback if no extension found, assume .mp3 for playback attempt
+        if (ext.empty()) ext = ".mp3";
+
         std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
         if (ext == ".mp3" || ext == ".wav" || ext == ".flac" || ext == ".ogg" || ext == ".m4a") {
@@ -1350,18 +1855,48 @@ public:
                 m_pipeline = gst_element_factory_make("playbin", "playbin");
             } else {
                 gst_element_set_state(m_pipeline, GST_STATE_NULL);
+                LOG(DEBUG, "GStreamer pipeline reset to NULL state.");
             }
 
             if (m_pipeline) {
-                std::string local_path = "/tmp/current_track" + ext;
-                if (download_smb_file(smb_path, local_path, m_config)) {
-                    std::string uri = "file://" + local_path;
+                if (!gst_is_initialized()) {
+                    LOG(ERROR, "GStreamer is not initialized!");
+                    return;
+                }
+                std::string path_str = (std::string)path_val;
+                LOG(DEBUG, "Processing path: " << path_str);
+                std::string play_path;
+                bool ready = false;
+
+                if (path_str.find("//") != std::string::npos || path_str.find("smb:") != std::string::npos) { // Percorso Samba
+                    play_path = "/tmp/current_track" + ext;
+                    if (download_smb_file(path_val, play_path, m_config)) ready = true;
+                } else { // Percorso locale (iPod)
+                    LOG(DEBUG, "Local path detected: " << path_str);
+                    play_path = path_str;
+                    if (fs::exists(play_path)) {
+                        ready = true;
+                        LOG(DEBUG, "Local file exists: " << play_path);
+                    } else {
+                        LOG(ERROR, "Local file does not exist or is not accessible: " << play_path);
+                    }
+                }
+                
+                if (ready) {
+                    std::string uri = "file://" + play_path;
                     g_object_set(m_pipeline, "uri", uri.c_str(), NULL);
                     g_object_set(m_pipeline, "volume", m_volume_scale.get_value() / 100.0, NULL);
                     gst_element_set_state(m_pipeline, GST_STATE_PLAYING);
                     
-                    m_current_track_row = Gtk::TreeModel::RowReference(m_files_model, Gtk::TreeModel::Path(iter));
-                    m_files_view.get_selection()->select(iter);
+                    m_current_track_row = Gtk::TreeModel::RowReference(model, Gtk::TreeModel::Path(iter));
+                    if (model == m_files_model) m_files_view.get_selection()->select(iter);
+                    else if (model == m_ipod_model) m_ipod_view.get_selection()->select(iter);
+                    else if (model == m_db_model) m_db_view.get_selection()->select(iter);
+                } else {
+                    LOG(ERROR, "Playback not ready for path: " << path_val << ". Check previous errors.");
+                    Gtk::MessageDialog dlg(*this, "Errore Riproduzione", false, Gtk::MESSAGE_ERROR, Gtk::BUTTONS_OK);
+                    dlg.set_secondary_text("Impossibile preparare il file per la riproduzione. Controlla i log per maggiori dettagli.");
+                    dlg.run();
                 }
             }
         }
@@ -1375,8 +1910,9 @@ public:
 
     void on_next_track() {
         if (!m_current_track_row.is_valid()) return;
+        auto model = m_current_track_row.get_model();
         auto path = m_current_track_row.get_path();
-        auto iter = m_files_model->get_iter(path);
+        auto iter = model->get_iter(path);
         
         while(iter) {
             iter++;
@@ -1390,7 +1926,7 @@ public:
             std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
             
             if (ext == ".mp3" || ext == ".wav" || ext == ".flac" || ext == ".ogg" || ext == ".m4a") {
-                play_track(iter);
+                play_track(iter, model);
                 return;
             }
         }
@@ -1402,6 +1938,40 @@ public:
         char buf[32];
         snprintf(buf, sizeof(buf), "%ld:%02ld", mins, secs);
         return std::string(buf);
+    }
+
+    void fetch_and_show_cover_art(const std::string& query) {
+        int gen = m_selection_gen;
+        std::thread([this, query, gen]() {
+            std::string encoded_query = url_encode(query);
+            std::string cmd = "curl -s \"https://itunes.apple.com/search?term=" + encoded_query + "&entity=song&limit=1\"";
+            
+            std::string result;
+            std::array<char, 128> buffer;
+            std::unique_ptr<FILE, int(*)(FILE*)> pipe(popen(cmd.c_str(), "r"), pclose);
+            if (pipe) {
+                while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+                    result += buffer.data();
+                }
+            }
+
+            std::regex re("\"artworkUrl100\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+            std::smatch match;
+            if (std::regex_search(result, match, re) && match.size() > 1) {
+                std::string artworkUrl = match.str(1);
+                size_t pos = artworkUrl.find("100x100");
+                if (pos != std::string::npos) artworkUrl.replace(pos, 7, "600x600");
+                
+                std::string temp_path = get_cache_dir() + "/temp_cover.jpg";
+                std::string cmd_dl = "curl -s \"" + artworkUrl + "\" -o \"" + temp_path + "\"";
+                if (system(cmd_dl.c_str()) == 0 && fs::exists(temp_path)) {
+                    Glib::signal_idle().connect([this, temp_path, gen]() {
+                        if (m_selection_gen == gen) display_image(temp_path);
+                        return false;
+                    });
+                }
+            }
+        }).detach();
     }
 
     void update_metadata_from_tags(GstTagList* tags) {
@@ -1453,6 +2023,7 @@ public:
                     auto pixbuf = loader->get_pixbuf();
                     // Ridimensiona se necessario (logica simile a display_image)
                     int width = m_col3_scrolled_window.get_allocation().get_width();
+                    if (width <= 20) width = 300;
                     if (width > 20) {
                         int new_width = width - 20;
                         int new_height = (pixbuf->get_height() * new_width) / pixbuf->get_width();
@@ -1460,6 +2031,7 @@ public:
                     }
                     m_image_preview.set(pixbuf);
                     m_image_preview.show();
+                    m_automatic_cover_search_done = true;
                 } catch(...) {}
                 gst_buffer_unmap(buffer, &map);
             }
@@ -1477,6 +2049,7 @@ public:
                     auto pixbuf = loader->get_pixbuf();
                     // Ridimensiona se necessario (logica simile a display_image)
                     int width = m_col3_scrolled_window.get_allocation().get_width();
+                    if (width <= 20) width = 300;
                     if (width > 20) {
                         int new_width = width - 20;
                         int new_height = (pixbuf->get_height() * new_width) / pixbuf->get_width();
@@ -1484,10 +2057,37 @@ public:
                     }
                     m_image_preview.set(pixbuf);
                     m_image_preview.show();
+                    m_automatic_cover_search_done = true;
                 } catch(...) {}
                 gst_buffer_unmap(buffer, &map);
             }
             gst_sample_unref(sample);
+        }
+
+        if (!m_automatic_cover_search_done && !m_image_preview.get_visible()) {
+            std::string a = m_entry_artist.get_text();
+            std::string t = m_entry_title.get_text();
+            std::string query;
+
+            if (!a.empty() && !t.empty()) {
+                query = a + " " + t;
+            } else {
+                // Fallback: usa il nome del file dalla selezione corrente se i tag sono vuoti
+                Glib::RefPtr<Gtk::TreeSelection> selection = m_db_view_active ? m_db_view.get_selection() : m_files_view.get_selection();
+                auto iter = selection->get_selected();
+                if (iter) {
+                    Gtk::TreeModel::Row row = *iter;
+                    std::string name = (Glib::ustring)row[m_columns.m_col_name];
+                    size_t dot_pos = name.find_last_of('.');
+                    if (dot_pos != std::string::npos) name = name.substr(0, dot_pos);
+                    query = name;
+                }
+            }
+
+            if (!query.empty()) {
+                m_automatic_cover_search_done = true;
+                fetch_and_show_cover_art(query);
+            }
         }
     }
 
@@ -1886,7 +2486,165 @@ public:
     }
 
     void on_recognize_clicked() {
-        auto selection = m_files_view.get_selection();
+        if (m_db_view_active) {
+            auto selection = m_db_view.get_selection();
+            std::vector<Gtk::TreeModel::Path> rows = selection->get_selected_rows();
+            
+            if (rows.size() > 1) {
+                // --- MODALITÀ BATCH (Selezione multipla) ---
+                std::vector<std::string> batch_paths;
+                for (auto path : rows) {
+                    auto iter = m_db_model->get_iter(path);
+                    if (iter) {
+                        batch_paths.push_back((Glib::ustring)(*iter)[m_columns.m_col_path]);
+                    }
+                }
+
+                m_btn_recognize.set_sensitive(false);
+                m_btn_recognize.set_label("Avvio Batch...");
+
+                std::thread([this, batch_paths]() {
+                    int total = batch_paths.size();
+                    int processed = 0;
+                    int updated = 0;
+                    
+                    // Helper per trovare lo script (copiato dalla logica singola)
+                    char self_path_buf[PATH_MAX] = {0};
+                    ssize_t count = readlink("/proc/self/exe", self_path_buf, PATH_MAX);
+                    std::string exe_path = (count > 0) ? std::string(self_path_buf, count) : "";
+                    std::string script_path = fs::path(exe_path).parent_path().string() + "/google_recognize.sh";
+
+                    if (!fs::exists(script_path)) {
+                         Glib::signal_idle().connect([this, script_path]() {
+                             Gtk::MessageDialog dlg(*this, "Script non trovato: " + script_path, false, Gtk::MESSAGE_ERROR, Gtk::BUTTONS_OK);
+                             dlg.run();
+                             m_btn_recognize.set_sensitive(true);
+                             m_btn_recognize.set_label("Invia a SongRep");
+                             return false;
+                         });
+                         return;
+                    }
+
+                    for (const auto& smb_path : batch_paths) {
+                        processed++;
+                        Glib::signal_idle().connect([this, processed, total]() {
+                            m_btn_recognize.set_label("Batch: " + std::to_string(processed) + "/" + std::to_string(total));
+                            return false;
+                        });
+
+                        std::string ext = fs::path(smb_path).extension();
+                        std::string ext_lower = ext;
+                        std::transform(ext_lower.begin(), ext_lower.end(), ext_lower.begin(), ::tolower);
+                        
+                        if (ext_lower != ".mp3" && ext_lower != ".m4a" && ext_lower != ".flac" && ext_lower != ".wav" && ext_lower != ".ogg") continue;
+
+                        std::string local_path = "/tmp/batch_rec_" + std::to_string(std::rand()) + ext_lower;
+                        
+                        if (!download_smb_file(smb_path, local_path, m_config)) continue;
+
+                        std::string cmd = "bash \"" + script_path + "\" \"" + local_path + "\" 2>&1";
+                        std::string rec_output;
+                        std::unique_ptr<FILE, int(*)(FILE*)> pipe(popen(cmd.c_str(), "r"), pclose);
+                        if (pipe) {
+                            std::array<char, 256> buffer;
+                            while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+                                std::string line = buffer.data();
+                                if (line.find("STATUS:") == std::string::npos) {
+                                    rec_output += line;
+                                }
+                            }
+                        }
+                        fs::remove(local_path);
+
+                        // Parsing Risultato "Titolo by Artista"
+                        if (!rec_output.empty() && rec_output.back() == '\n') rec_output.pop_back();
+                        size_t by_pos = rec_output.find(" by ");
+                        if (by_pos != std::string::npos) {
+                            std::string title = rec_output.substr(0, by_pos);
+                            std::string artist = rec_output.substr(by_pos + 4);
+                            
+                            if (title != "Sconosciuto" && !title.empty()) {
+                                // Ricerca Metadati Online (iTunes API)
+                                std::string query = artist + " " + title;
+                                std::string encoded_query = url_encode(query);
+                                std::string search_cmd = "curl -s \"https://itunes.apple.com/search?term=" + encoded_query + "&entity=song&limit=1\"";
+                                
+                                std::string search_json;
+                                std::unique_ptr<FILE, int(*)(FILE*)> spipe(popen(search_cmd.c_str(), "r"), pclose);
+                                if (spipe) {
+                                    std::array<char, 128> buf;
+                                    while (fgets(buf.data(), buf.size(), spipe.get()) != nullptr) search_json += buf.data();
+                                }
+
+                                // Estrazione JSON minimale
+                                auto get_json_val = [&](const std::string& json, const std::string& key) -> std::string {
+                                    std::regex re("\"" + key + "\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+                                    std::smatch match;
+                                    if (std::regex_search(json, match, re) && match.size() > 1) return match.str(1);
+                                    return "";
+                                };
+
+                                std::string found_artist = get_json_val(search_json, "artistName");
+                                std::string found_title = get_json_val(search_json, "trackName");
+                                std::string found_album = get_json_val(search_json, "collectionName");
+                                std::string found_genre = get_json_val(search_json, "primaryGenreName");
+                                std::string artworkUrl = get_json_val(search_json, "artworkUrl100");
+                                std::string date = get_json_val(search_json, "releaseDate");
+                                std::string found_year = (date.size() >= 4) ? date.substr(0, 4) : "";
+
+                                if (found_artist.empty()) found_artist = artist;
+                                if (found_title.empty()) found_title = title;
+
+                                std::string cover_path_db = "";
+                                if (!artworkUrl.empty()) {
+                                    size_t pos = artworkUrl.find("100x100");
+                                    if (pos != std::string::npos) artworkUrl.replace(pos, 7, "600x600");
+                                    
+                                    std::string cache_path = get_hashed_path(smb_path, ".jpg");
+                                    std::string cmd_dl = "curl -s \"" + artworkUrl + "\" -o \"" + cache_path + "\"";
+                                    if (system(cmd_dl.c_str()) == 0) cover_path_db = cache_path;
+                                }
+
+                                // Aggiornamento DB
+                                if (m_db) {
+                                    std::string sql = "UPDATE music SET artist=?, title=?, album=?, year=?, genre=?, coverPath=? WHERE path=?;";
+                                    sqlite3_stmt* stmt;
+                                    if (sqlite3_prepare_v2(m_db, sql.c_str(), -1, &stmt, 0) == SQLITE_OK) {
+                                        sqlite3_bind_text(stmt, 1, found_artist.c_str(), -1, SQLITE_TRANSIENT);
+                                        sqlite3_bind_text(stmt, 2, found_title.c_str(), -1, SQLITE_TRANSIENT);
+                                        sqlite3_bind_text(stmt, 3, found_album.c_str(), -1, SQLITE_TRANSIENT);
+                                        sqlite3_bind_text(stmt, 4, found_year.c_str(), -1, SQLITE_TRANSIENT);
+                                        sqlite3_bind_text(stmt, 5, found_genre.c_str(), -1, SQLITE_TRANSIENT);
+                                        sqlite3_bind_text(stmt, 6, cover_path_db.c_str(), -1, SQLITE_TRANSIENT);
+                                        sqlite3_bind_text(stmt, 7, smb_path.c_str(), -1, SQLITE_TRANSIENT);
+                                        if (sqlite3_step(stmt) == SQLITE_DONE) updated++;
+                                        sqlite3_finalize(stmt);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    Glib::signal_idle().connect([this, updated]() {
+                        m_btn_recognize.set_sensitive(true);
+                        m_btn_recognize.set_label("Invia a SongRep");
+                        if (m_db_view_active) load_db_view();
+                        Gtk::MessageDialog dlg(*this, "Batch completato. Aggiornati " + std::to_string(updated) + " brani.", false, Gtk::MESSAGE_INFO, Gtk::BUTTONS_OK);
+                        dlg.run();
+                        return false;
+                    });
+                }).detach();
+                return;
+            }
+        }
+
+        Glib::RefPtr<Gtk::TreeSelection> selection;
+        if (m_db_view_active) {
+            selection = m_db_view.get_selection();
+        } else {
+            selection = m_files_view.get_selection();
+        }
+
         auto iter = selection->get_selected();
         if (!iter) return;
 
@@ -1895,8 +2653,10 @@ public:
         Glib::ustring smb_path = row[m_columns.m_col_path];
 
         std::string ext = "";
-        size_t dot_pos = name.find_last_of('.');
-        if (dot_pos != std::string::npos) ext = name.substr(dot_pos);
+        // Usa smb_path per l'estensione perché 'name' nella vista DB potrebbe essere "Artista - Titolo"
+        std::string path_str = smb_path;
+        size_t dot_pos = path_str.find_last_of('.');
+        if (dot_pos != std::string::npos) ext = path_str.substr(dot_pos);
         std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
         if (ext != ".mp3" && ext != ".wav" && ext != ".flac" && ext != ".ogg" && ext != ".m4a") {
@@ -1916,9 +2676,22 @@ public:
                 // Usa lo script google_recognize.sh fornito
                 char self_path_buf[PATH_MAX] = {0};
                 ssize_t count = readlink("/proc/self/exe", self_path_buf, PATH_MAX);
-                std::string exe_path = (count > 0) ? self_path_buf : "";
+                std::string exe_path = (count > 0) ? std::string(self_path_buf, count) : "";
                 std::string script_path = fs::path(exe_path).parent_path().string() + "/google_recognize.sh";
                 
+                // Verifica esistenza script
+                if (!fs::exists(script_path)) {
+                    Glib::signal_idle().connect([this, script_path]() {
+                        m_btn_recognize.set_sensitive(true);
+                        m_btn_recognize.set_label("Invia a SongRep");
+                        Gtk::MessageDialog dlg(*this, "Errore File", false, Gtk::MESSAGE_ERROR, Gtk::BUTTONS_OK);
+                        dlg.set_secondary_text("Script non trovato: " + script_path);
+                        dlg.run();
+                        return false;
+                    });
+                    return;
+                }
+
                 std::string cmd = "bash \"" + script_path + "\" \"" + local_path + "\" 2>&1";
                 
                 std::array<char, 256> buffer; // Larger buffer
@@ -1927,7 +2700,19 @@ public:
                 
                 if (pipe) {
                     while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
-                        result += buffer.data();
+                        std::string line = buffer.data();
+                        // Gestione Feedback Real-time
+                        if (line.find("STATUS: ") == 0) {
+                            std::string status_msg = line.substr(8);
+                            if (!status_msg.empty() && status_msg.back() == '\n') status_msg.pop_back();
+                            
+                            Glib::signal_idle().connect([this, status_msg]() {
+                                m_btn_recognize.set_label(status_msg);
+                                return false;
+                            });
+                            continue; // Non aggiungere status al risultato finale
+                        }
+                        result += line;
                     }
                 }
 
@@ -1937,7 +2722,13 @@ public:
                     if (fs::exists(local_path)) fs::remove(local_path);
 
                     // Verifica che la selezione non sia cambiata nel frattempo
-                    auto selection = m_files_view.get_selection();
+                    Glib::RefPtr<Gtk::TreeSelection> selection;
+                    if (m_db_view_active) {
+                        selection = m_db_view.get_selection();
+                    } else {
+                        selection = m_files_view.get_selection();
+                    }
+                    
                     auto iter = selection->get_selected();
                     if (!iter || (Glib::ustring)(*iter)[m_columns.m_col_path] != smb_path) {
                         return false;
@@ -1990,9 +2781,77 @@ public:
         perform_save_metadata(false);
     }
 
+    void on_save_db_only_clicked() {
+        if (!m_db_view_active) return;
+        
+        auto selection = m_db_view.get_selection();
+        auto iter = selection->get_selected();
+        if (!iter) return;
+
+        // Salva riferimento alla riga perché l'ordinamento potrebbe spostarla
+        Gtk::TreeRowReference row_ref(m_db_model, m_db_model->get_path(iter));
+
+        Gtk::TreeModel::Row row = *iter;
+        std::string path = (Glib::ustring)row[m_columns.m_col_path];
+
+        std::string artist = m_entry_artist.get_text();
+        std::string title = m_entry_title.get_text();
+        std::string album = m_entry_album.get_text();
+        std::string year = m_entry_year.get_text();
+        std::string genre = m_entry_genre.get_text();
+
+        if (m_db) {
+            const char* sql = "UPDATE music SET artist=?, title=?, album=?, year=?, genre=? WHERE path=?;";
+            sqlite3_stmt* stmt;
+            if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, 0) == SQLITE_OK) {
+                 sqlite3_bind_text(stmt, 1, artist.c_str(), -1, SQLITE_TRANSIENT);
+                 sqlite3_bind_text(stmt, 2, title.c_str(), -1, SQLITE_TRANSIENT);
+                 sqlite3_bind_text(stmt, 3, album.c_str(), -1, SQLITE_TRANSIENT);
+                 sqlite3_bind_text(stmt, 4, year.c_str(), -1, SQLITE_TRANSIENT);
+                 sqlite3_bind_text(stmt, 5, genre.c_str(), -1, SQLITE_TRANSIENT);
+                 sqlite3_bind_text(stmt, 6, path.c_str(), -1, SQLITE_TRANSIENT);
+                 
+                 if (sqlite3_step(stmt) == SQLITE_DONE) {
+                     // Aggiorna Modello UI
+                     row[m_columns.m_col_artist] = artist;
+                     row[m_columns.m_col_title] = title;
+                     row[m_columns.m_col_album] = album;
+                     row[m_columns.m_col_year] = year;
+                     row[m_columns.m_col_genre] = genre;
+                     
+                     if (!artist.empty() && !title.empty()) {
+                        row[m_columns.m_col_name] = artist + " - " + title;
+                     }
+
+                     // Ripristina focus e scroll sulla riga (che potrebbe essersi spostata)
+                     if (row_ref.is_valid()) {
+                         auto new_path = row_ref.get_path();
+                         m_db_view.scroll_to_row(new_path);
+                         m_db_view.get_selection()->select(new_path);
+                     }
+                     
+                     update_db_labels(path);
+
+                     Gtk::MessageDialog dlg(*this, "Database aggiornato.", false, Gtk::MESSAGE_INFO, Gtk::BUTTONS_OK);
+                     dlg.run();
+                 } else {
+                     Gtk::MessageDialog dlg(*this, "Errore aggiornamento DB.", false, Gtk::MESSAGE_ERROR, Gtk::BUTTONS_OK);
+                     dlg.run();
+                 }
+                 sqlite3_finalize(stmt);
+            }
+        }
+    }
+
     void perform_save_metadata(bool silent) {
         LOG(INFO, "Save metadata clicked");
-        auto selection = m_files_view.get_selection();
+        Glib::RefPtr<Gtk::TreeSelection> selection;
+        if (m_db_view_active) {
+            selection = m_db_view.get_selection();
+        } else {
+            selection = m_files_view.get_selection();
+        }
+
         auto iter = selection->get_selected();
         if (!iter) return;
 
@@ -2001,8 +2860,10 @@ public:
         Glib::ustring smb_path = row[m_columns.m_col_path];
 
         std::string ext = "";
-        size_t dot_pos = name.find_last_of('.');
-        if (dot_pos != std::string::npos) ext = name.substr(dot_pos);
+        // Usa smb_path per l'estensione (il nome visualizzato nel DB potrebbe non averla)
+        std::string path_str = (std::string)smb_path;
+        size_t dot_pos = path_str.find_last_of('.');
+        if (dot_pos != std::string::npos) ext = path_str.substr(dot_pos);
         std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
         // Supporto scrittura solo per MP3 per ora
@@ -2014,8 +2875,18 @@ public:
             return;
         }
 
-        std::string local_path = "/tmp/current_track" + ext;
-        std::string temp_out_path = "/tmp/temp_tag_write" + ext;
+        // Usa percorsi temporanei univoci per evitare conflitti con la riproduzione
+        std::string work_path = "/tmp/edit_work_" + std::to_string(std::rand()) + ext;
+        std::string output_path = "/tmp/edit_out_" + std::to_string(std::rand()) + ext;
+
+        // 1. Scarica il file specifico da modificare (fondamentale!)
+        if (!download_smb_file(smb_path, work_path, m_config)) {
+             if (!silent) {
+                 Gtk::MessageDialog dlg(*this, "Errore: impossibile scaricare il file per la modifica.", false, Gtk::MESSAGE_ERROR, Gtk::BUTTONS_OK);
+                 dlg.run();
+             }
+             return;
+        }
 
         // Pipeline per scrivere i tag: filesrc -> mpegaudioparse -> id3mux -> filesink
         GstElement *pipeline = gst_pipeline_new("tag-writer");
@@ -2026,11 +2897,12 @@ public:
 
         if (!pipeline || !src || !parse || !mux || !sink) {
             if (pipeline) gst_object_unref(pipeline);
+            if (fs::exists(work_path)) fs::remove(work_path);
             return;
         }
 
-        g_object_set(src, "location", local_path.c_str(), NULL);
-        g_object_set(sink, "location", temp_out_path.c_str(), NULL);
+        g_object_set(src, "location", work_path.c_str(), NULL);
+        g_object_set(sink, "location", output_path.c_str(), NULL);
 
         gst_bin_add_many(GST_BIN(pipeline), src, parse, mux, sink, NULL);
         gst_element_link_many(src, parse, mux, sink, NULL);
@@ -2090,44 +2962,83 @@ public:
         // Esegui pipeline
         gst_element_set_state(pipeline, GST_STATE_PLAYING);
         GstBus *bus = gst_element_get_bus(pipeline);
-        gst_bus_timed_pop_filtered(bus, GST_CLOCK_TIME_NONE, (GstMessageType)(GST_MESSAGE_EOS | GST_MESSAGE_ERROR));
+        GstMessage *msg = gst_bus_timed_pop_filtered(bus, GST_CLOCK_TIME_NONE, (GstMessageType)(GST_MESSAGE_EOS | GST_MESSAGE_ERROR));
+        
+        bool success = false;
+        if (msg) {
+            if (GST_MESSAGE_TYPE(msg) == GST_MESSAGE_EOS) {
+                success = true;
+            } else {
+                GError *err = NULL;
+                gchar *debug = NULL;
+                gst_message_parse_error(msg, &err, &debug);
+                LOG(ERROR, "GStreamer Tagging Error: " << (err ? err->message : "unknown"));
+                if (err) g_error_free(err);
+                if (debug) g_free(debug);
+            }
+            gst_message_unref(msg);
+        }
+        
         gst_object_unref(bus);
         gst_element_set_state(pipeline, GST_STATE_NULL);
         gst_object_unref(pipeline);
 
-        // Sovrascrivi file locale e carica su SMB
-        fs::rename(temp_out_path, local_path);
-        
-        std::string remote_filename = (std::string)name;
-        std::string cmd = "put \"" + local_path + "\" \"" + remote_filename + "\"";
-        exec_smb_command(smb_path, m_config, cmd);
-        
-        // Aggiorna cache
-        Metadata meta;
-        meta.artist = m_entry_artist.get_text();
-        meta.title = m_entry_title.get_text();
-        meta.album = m_entry_album.get_text();
-        meta.year = m_entry_year.get_text();
-        meta.genre = m_entry_genre.get_text();
-        // Preserve tech info
-        if (m_meta_cache.count((std::string)smb_path)) {
-            auto& old = m_meta_cache[(std::string)smb_path];
-            meta.bitrate = old.bitrate; meta.codec = old.codec; meta.samplerate = old.samplerate; meta.size_mb = old.size_mb;
+        if (success && fs::exists(output_path)) {
+            // Usa il nome file reale dal percorso, non il nome visualizzato nella UI
+            std::string remote_filename = fs::path((std::string)smb_path).filename().string();
+            std::string cmd = "put \"" + output_path + "\" \"" + remote_filename + "\"";
+            
+            // Estrai la cartella genitore per smbclient (non passare il percorso completo del file!)
+            std::string parent_dir = smb_path;
+            size_t last_slash = parent_dir.find_last_of('/');
+            if (last_slash != std::string::npos) {
+                parent_dir = parent_dir.substr(0, last_slash);
+            }
+
+            auto upload_res = exec_smb_command(parent_dir, m_config, cmd);
+            if (!upload_res.first || upload_res.second.find("NT_STATUS_") != std::string::npos) {
+                if (!silent) {
+                    Gtk::MessageDialog dlg(*this, "Errore caricamento SMB: " + upload_res.second, false, Gtk::MESSAGE_ERROR, Gtk::BUTTONS_OK);
+                    dlg.run();
+                }
+            } else {
+                // Aggiorna cache
+                Metadata meta;
+                meta.artist = m_entry_artist.get_text();
+                meta.title = m_entry_title.get_text();
+                meta.album = m_entry_album.get_text();
+                meta.year = m_entry_year.get_text();
+                meta.genre = m_entry_genre.get_text();
+                // Preserve tech info
+                if (m_meta_cache.count((std::string)smb_path)) {
+                    auto& old = m_meta_cache[(std::string)smb_path];
+                    meta.bitrate = old.bitrate; meta.codec = old.codec; meta.samplerate = old.samplerate; meta.size_mb = old.size_mb;
+                }
+
+                // Preserva coverPath esistente se c'era
+                if (!new_cache_path.empty()) {
+                    fs::copy_file(cover_path, new_cache_path, fs::copy_options::overwrite_existing);
+                    meta.coverPath = new_cache_path;
+                } else if (m_meta_cache.count((std::string)smb_path)) {
+                    meta.coverPath = m_meta_cache[(std::string)smb_path].coverPath;
+                }
+                m_meta_cache[(std::string)smb_path] = meta;
+
+                if (!silent) {
+                    Gtk::MessageDialog dlg(*this, "Metadati salvati con successo!", false, Gtk::MESSAGE_INFO, Gtk::BUTTONS_OK);
+                    dlg.run();
+                }
+            }
+        } else {
+            if (!silent) {
+                Gtk::MessageDialog dlg(*this, "Errore durante la scrittura dei tag (Pipeline failed).", false, Gtk::MESSAGE_ERROR, Gtk::BUTTONS_OK);
+                dlg.run();
+            }
         }
 
-        // Preserva coverPath esistente se c'era
-        if (!new_cache_path.empty()) {
-            fs::copy_file(cover_path, new_cache_path, fs::copy_options::overwrite_existing);
-            meta.coverPath = new_cache_path;
-        } else if (m_meta_cache.count((std::string)smb_path)) {
-            meta.coverPath = m_meta_cache[(std::string)smb_path].coverPath;
-        }
-        m_meta_cache[(std::string)smb_path] = meta;
-
-        if (!silent) {
-            Gtk::MessageDialog dlg(*this, "Metadati salvati con successo!", false, Gtk::MESSAGE_INFO, Gtk::BUTTONS_OK);
-            dlg.run();
-        }
+        // Pulizia file temporanei
+        if (fs::exists(work_path)) fs::remove(work_path);
+        if (fs::exists(output_path)) fs::remove(output_path);
     }
 
     bool parse_smb_line(const std::string& line, std::string& name, bool& is_folder, bool& is_hidden) {
@@ -2153,6 +3064,7 @@ public:
     }
 
     void on_play_clicked() {
+        LOG(DEBUG, "on_play_clicked called.");
         LOG(INFO, "Play button clicked");
         auto selection = m_files_view.get_selection();
         auto iter = selection->get_selected();
@@ -2167,17 +3079,31 @@ public:
             }
 
             if (is_same_track && m_pipeline) {
-                gst_element_set_state(m_pipeline, GST_STATE_PLAYING);
+                GstState current_state;
+                gst_element_get_state(m_pipeline, &current_state, NULL, 0);
+                if (current_state == GST_STATE_PAUSED || current_state == GST_STATE_READY) {
+                    LOG(DEBUG, "Resuming playback of current track.");
+                    gst_element_set_state(m_pipeline, GST_STATE_PLAYING);
+                } else {
+                    LOG(DEBUG, "Current track already playing or in an unexpected state. Re-playing selected track.");
+                    play_track(iter, m_files_model);
+                }
             } else {
-                play_track(iter);
+                LOG(DEBUG, "New track selected or no track playing. Starting playback of selected track.");
+                play_track(iter, m_files_model);
             }
         } else if (m_pipeline) {
-            gst_element_set_state(m_pipeline, GST_STATE_PLAYING);
+            GstState current_state;
+            gst_element_get_state(m_pipeline, &current_state, NULL, 0);
+            if (current_state == GST_STATE_PAUSED || current_state == GST_STATE_READY) {
+                LOG(DEBUG, "No track selected, but pipeline exists and is paused/ready. Resuming playback.");
+                gst_element_set_state(m_pipeline, GST_STATE_PLAYING);
+            } else {
+                LOG(INFO, "Play clicked but no track selected and pipeline not in paused/ready state.");
+            }
+        } else {
+            LOG(INFO, "Play clicked but no track selected and no pipeline initialized.");
         }
-    }
-
-    void on_pause_clicked() {
-        if (m_pipeline) gst_element_set_state(m_pipeline, GST_STATE_PAUSED);
     }
 
     void on_stop_clicked() {
@@ -2187,7 +3113,11 @@ public:
             m_scale.set_value(0);
             m_updating_scale = false;
             set_title("Music Network Player " + APP_VERSION);
+            LOG(DEBUG, "Playback stopped and pipeline set to NULL.");
         }
+    }
+    void on_pause_clicked() {
+        if (m_pipeline) { gst_element_set_state(m_pipeline, GST_STATE_PAUSED); LOG(DEBUG, "Playback paused."); }
     }
 
     bool on_folder_button_press(GdkEventButton* event) {
@@ -2207,6 +3137,18 @@ public:
             auto selection = m_files_view.get_selection();
             if (selection->count_selected_rows() > 0) {
                 m_context_view = &m_files_view;
+                m_context_menu.popup_at_pointer((GdkEvent*)event);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool on_ipod_button_press(GdkEventButton* event) {
+        if (event->type == GDK_BUTTON_PRESS && event->button == 3) { // Tasto destro
+            auto selection = m_ipod_view.get_selection();
+            if (selection->count_selected_rows() > 0) {
+                m_context_view = &m_ipod_view;
                 m_context_menu.popup_at_pointer((GdkEvent*)event);
                 return true;
             }
@@ -2252,6 +3194,7 @@ public:
                 }
 
                 if (!context_path.empty()) {
+                    LOG(DEBUG, "Attempting to rename: " << filename << " to " << new_name << " in context: " << context_path);
                     std::string cmd = "rename \"" + (std::string)filename + "\" \"" + new_name + "\"";
                     exec_smb_command(context_path, m_config, cmd);
                     
@@ -2274,6 +3217,8 @@ public:
                             refresh_list();
                         }
                     }
+                } else {
+                    LOG(ERROR, "Could not determine context path for rename operation.");
                 }
             }
         }
@@ -2281,99 +3226,86 @@ public:
 
     void on_menu_delete() {
         LOG(INFO, "Delete menu item clicked");
-        LOG(INFO, "Delete menu item clicked");
         if (!m_context_view) return;
         auto selection = m_context_view->get_selection();
+        auto paths = selection->get_selected_rows();
+        if (paths.empty()) return;
 
-        auto iter = selection->get_selected();
-        if (!iter) return;
-        Gtk::TreeModel::Row row = *iter;
-        Glib::ustring filename = row[m_columns.m_col_name];
+        std::string msg = (paths.size() == 1) ? 
+            "Sei sicuro di voler eliminare l'elemento selezionato?" : 
+            "Sei sicuro di voler eliminare i " + std::to_string(paths.size()) + " elementi selezionati?";
 
-        Glib::ustring old_path = row[m_columns.m_col_path];
-        Glib::ustring icon = row[m_columns.m_col_icon];
-        bool is_folder = (icon == "folder");
+        Gtk::MessageDialog dlg(*this, msg, false, Gtk::MESSAGE_QUESTION, Gtk::BUTTONS_YES_NO);
+        if (dlg.run() != Gtk::RESPONSE_YES) return;
 
-        Gtk::MessageDialog dlg(*this, "Sei sicuro di voler eliminare " + filename + "?", false, Gtk::MESSAGE_QUESTION, Gtk::BUTTONS_YES_NO);
-        if (dlg.run() == Gtk::RESPONSE_YES) {
-             std::string context_path;
-             if (m_context_view == &m_files_view) {
-                 auto folder_sel = m_folder_view.get_selection();
+        auto model = m_context_view->get_model();
+        std::vector<Gtk::TreeRowReference> row_refs;
+        for (const auto& path : paths) {
+            row_refs.push_back(Gtk::TreeRowReference(model, path));
+        }
 
-                 auto folder_iter = folder_sel->get_selected();
-                 if (folder_iter) {
-                     context_path = (Glib::ustring)(*folder_iter)[m_columns.m_col_path];
-                 }
-             } else {
-                 std::string old_path_str = old_path;
-                 size_t last_slash = old_path_str.find_last_of('/');
-                 if (last_slash != std::string::npos) {
-                     context_path = old_path_str.substr(0, last_slash);
-                 }
-             }
+        bool samba_needs_refresh = false;
+        bool samba_folder_deleted = false;
 
-             if (!context_path.empty()) {
-                std::string full_smb_path = context_path;
-                if (!full_smb_path.empty() && full_smb_path.back() != '/') full_smb_path += "/";
-                full_smb_path += filename;
+        for (auto& ref : row_refs) {
+            if (!ref.is_valid()) continue;
+            auto iter = model->get_iter(ref.get_path());
+            if (!iter) continue;
+            Gtk::TreeModel::Row row = *iter;
 
-                 std::string cmd;
-                 if (is_folder) {
-                     cmd = "rmdir \"" + (std::string)filename + "\"";
-                 } else {
-                     cmd = "del \"" + (std::string)filename + "\"";
-                 }
-
-                 std::pair<bool, std::string> result = exec_smb_command(context_path, m_config, cmd);
-                 bool deleted = false;
-                 std::string error_message;
-
-                 // smbclient può restituire 0 anche se il comando fallisce (es. rmdir su cartella non vuota),
-                 // quindi controlliamo l'output per i messaggi di stato NT.
-                 if (result.first && result.second.find("NT_STATUS_") == std::string::npos) {
-                     deleted = true;
-                 } else {
-                     error_message = result.second;
-                 }
- 
-                 if (!deleted) {
-                     std::cerr << "Errore durante l'eliminazione di " << filename << ": " << error_message << std::endl;
-                     Gtk::MessageDialog dlg(*this, "Errore durante l'eliminazione: " + error_message, false, Gtk::MESSAGE_ERROR, Gtk::BUTTONS_OK);
-                     dlg.run();                    
-                        return;
+            if (m_context_view == &m_ipod_view) {
+                std::string file_path = (Glib::ustring)row[m_columns.m_col_path];
+                try {
+                    if (fs::exists(file_path)) {
+                        fs::remove(file_path);
+                        m_ipod_model->erase(iter);
                     }
-                 
-                 if (m_context_view == &m_files_view) {
-                     m_files_model->erase(iter);
-                     
-                    
-                    
-                    if (!error_message.empty()) {
-                      std::cerr << "Output from smbclient: " << error_message << std::endl;
+                } catch (const std::exception& e) {
+                    LOG(ERROR, "Errore eliminazione iPod: " << e.what());
+                }
+            } else {
+                // Logica Samba
+                Glib::ustring filename = row[m_columns.m_col_name];
+                Glib::ustring old_path = row[m_columns.m_col_path];
+                Glib::ustring icon = row[m_columns.m_col_icon];
+                bool is_folder = (icon == "folder");
+
+                std::string context_path;
+                if (m_context_view == &m_files_view) {
+                    auto folder_sel = m_folder_view.get_selection();
+                    auto folder_iter = folder_sel->get_selected();
+                    if (folder_iter) context_path = (Glib::ustring)(*folder_iter)[m_columns.m_col_path];
+                } else {
+                    std::string old_path_str = old_path;
+                    size_t last_slash = old_path_str.find_last_of('/');
+                    if (last_slash != std::string::npos) context_path = old_path_str.substr(0, last_slash);
+                }
+
+                if (!context_path.empty()) {
+                    std::string cmd = is_folder ? "rmdir \"" + (std::string)filename + "\"" : "del \"" + (std::string)filename + "\"";
+                    auto result = exec_smb_command(context_path, m_config, cmd);
+                    if (result.first && result.second.find("NT_STATUS_") == std::string::npos) {
+                        if (m_context_view == &m_files_view) m_files_model->erase(iter);
+                        else if (m_context_view == &m_folder_view) m_folder_model->erase(iter);
+                        samba_needs_refresh = true;
+                        if (is_folder) samba_folder_deleted = true;
                     }
+                }
+            }
+        }
 
-                    
-                     m_pColFile->set_title("File (" + std::to_string(m_files_model->children().size()) + ")");
-
-                     Glib::signal_timeout().connect([this](){ on_folder_selected(); return false; }, 200);
-                     if (is_folder) {
-                         auto folder_sel = m_folder_view.get_selection();
-                         auto folder_iter = folder_sel->get_selected();
-                         if (folder_iter) {
-                             load_folder_content(folder_iter);
-                             m_folder_view.expand_row(m_folder_model->get_path(folder_iter), false);
-                         }
-                     }
-                 } else {
-                     Gtk::TreeModel::iterator parent = row.parent();
-                     if (parent) {
-                         load_folder_content(parent);
-                         m_folder_view.expand_row(m_folder_model->get_path(parent), false);
-                     } else {
-                         refresh_list();
-                     }
-                 }
-             }
+        if (m_context_view == &m_files_view) {
+            m_pColFile->set_title("File (" + std::to_string(m_files_model->children().size()) + ")");
+            if (samba_needs_refresh) {
+                Glib::signal_timeout().connect([this](){ on_folder_selected(); return false; }, 200);
+                if (samba_folder_deleted) {
+                    auto folder_sel = m_folder_view.get_selection();
+                    auto folder_iter = folder_sel->get_selected();
+                    if (folder_iter) load_folder_content(folder_iter);
+                }
+            }
+        } else if (m_context_view == &m_folder_view && samba_needs_refresh) {
+            refresh_list();
         }
     }
 
@@ -2383,14 +3315,22 @@ public:
         m_files_model->clear();
         m_folder_model->clear();
         
+        LOG(DEBUG, "Starting refresh_list for Samba path: " << m_config.path);
         SambaConfig config = m_config;
         std::thread([this, config](){
             std::string output = exec_smb(config.path, config);
             Glib::signal_idle().connect([this, output](){
+                if (output.find("NT_STATUS_") != std::string::npos || (output.find("Connection") != std::string::npos && output.find("failed") != std::string::npos)) {
+                    Gtk::MessageDialog dlg(*this, "Errore Samba", false, Gtk::MESSAGE_ERROR, Gtk::BUTTONS_OK);
+                    dlg.set_secondary_text("Impossibile connettersi: " + output);
+                    dlg.run();
+                }
+
                 std::istringstream stream(output);
                 std::string line;
                 while (std::getline(stream, line)) {
                     std::string name;
+                    LOG(DEBUG, "Parsing SMB line: " << line);
                     bool is_folder = false;
                     bool is_hidden = false;
                     if (parse_smb_line(line, name, is_folder, is_hidden)) {
@@ -2419,6 +3359,8 @@ public:
                     }
                 }
                 m_pColFile->set_title("File (" + std::to_string(m_files_model->children().size()) + ")");
+                LOG(DEBUG, "Finished refreshing list. Found " << m_files_model->children().size() << " files.");
+
                 return false;
             });
         }).detach();
@@ -2448,6 +3390,7 @@ public:
     void init_db() {
         if (sqlite3_open(DB_FILENAME.c_str(), &m_db)) {
             LOG(ERROR, "Can't open database: " << sqlite3_errmsg(m_db));
+            Gtk::MessageDialog dlg(*this, "Errore Database", false, Gtk::MESSAGE_ERROR, Gtk::BUTTONS_OK); dlg.set_secondary_text("Impossibile aprire il database: " + std::string(sqlite3_errmsg(m_db))); dlg.run();
             m_db = nullptr;
             return;
         }
@@ -2461,6 +3404,8 @@ public:
         char* err_msg = 0;
         if (sqlite3_exec(m_db, sql, 0, 0, &err_msg) != SQLITE_OK) {
             LOG(ERROR, "SQL error: " << err_msg);
+            Gtk::MessageDialog dlg(*this, "Errore Database", false, Gtk::MESSAGE_ERROR, Gtk::BUTTONS_OK); dlg.set_secondary_text("Errore SQL nella creazione tabella: " + std::string(err_msg)); dlg.run();
+
             sqlite3_free(err_msg);
             sqlite3_close(m_db);
             m_db = nullptr;
@@ -2486,16 +3431,20 @@ public:
             sqlite3_exec(m_db, query, 0, 0, &err);
             if (err) sqlite3_free(err); // Ignoriamo errori (es. colonna già esistente)
         }
+        LOG(INFO, "Database initialized successfully.");
     }
 
     void load_db_view() {
         if (!m_db) return;
         m_db_model->clear();
         
+        int count = 0;
+        LOG(DEBUG, "Loading DB view from database.");
         const char* sql = "SELECT artist, title, album, year, genre, path FROM music ORDER BY artist, album, title;";
         sqlite3_stmt* stmt;
         if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, 0) == SQLITE_OK) {
             while (sqlite3_step(stmt) == SQLITE_ROW) {
+                count++;
                 const unsigned char* artist_unsigned = sqlite3_column_text(stmt, 0);
                 const unsigned char* title_unsigned = sqlite3_column_text(stmt, 1);
                 const unsigned char* album_unsigned = sqlite3_column_text(stmt, 2);
@@ -2527,6 +3476,8 @@ public:
             }
         }
         sqlite3_finalize(stmt);
+        LOG(INFO, "DB view loaded. Found " << count << " records.");
+        m_scan_status_label.set_text("Record nel DB: " + std::to_string(count));
     }
 
     void on_clear_db_clicked() {
@@ -2541,9 +3492,8 @@ public:
             char* err_msg = 0;
             if (sqlite3_exec(m_db, "DELETE FROM music;", 0, 0, &err_msg) != SQLITE_OK) {
                 LOG(ERROR, "SQL error on DELETE: " << err_msg);
+                Gtk::MessageDialog err_dlg(*this, "Errore Database", false, Gtk::MESSAGE_ERROR, Gtk::BUTTONS_OK); err_dlg.set_secondary_text("Errore SQL nella pulizia: " + std::string(err_msg)); err_dlg.run();
                 sqlite3_free(err_msg);
-                Gtk::MessageDialog err_dlg(*this, "Errore durante la pulizia del database.", false, Gtk::MESSAGE_ERROR, Gtk::BUTTONS_OK);
-                err_dlg.run();
             } else {
                 sqlite3_exec(m_db, "VACUUM;", 0, 0, &err_msg); // Best effort
                 LOG(INFO, "Database cleared successfully.");
@@ -2553,6 +3503,7 @@ public:
     }
 
     void on_scan_library_clicked() {
+        LOG(INFO, "Scan library button clicked.");
         if (m_scan_running) {
             m_stop_scan = true;
             m_btnScanDB.set_sensitive(false);
@@ -2576,6 +3527,7 @@ public:
         auto phase1_active = std::make_shared<std::atomic<bool>>(true);
 
         m_scan_thread = std::thread([this, phase1_active]() {
+            LOG(INFO, "Scan library thread started.");
             auto thread_cleanup = [this](const std::string& final_message) {
                 m_scan_running = false;
                 Glib::signal_idle().connect([this, final_message]() {
@@ -2593,7 +3545,7 @@ public:
                     }
                     Glib::signal_timeout().connect([this]() {
                         m_scan_progress_bar.hide();
-                        m_scan_status_label.set_text("");
+                        if (!m_db_view_active) m_scan_status_label.set_text("");
                         return false;
                     }, 2000);
                     return false;
@@ -2601,6 +3553,7 @@ public:
             };
 
             std::vector<std::string> audio_files;
+            LOG(DEBUG, "Phase 1: Starting recursive search for audio files in: " << m_config.path);
             // Fase 1: Trova tutti i file audio ricorsivamente
             Glib::signal_idle().connect([this, phase1_active]() {
                 if (m_scan_running && !m_stop_scan && *phase1_active) {
@@ -2610,19 +3563,34 @@ public:
                 return false;
             });
             find_audio_files_recursive(m_config.path, audio_files);
+            LOG(DEBUG, "Phase 1 completed. Found " << audio_files.size() << " audio files.");
             *phase1_active = false; // Ferma l'animazione pulsante
 
             // Fase 2: Processa ogni file
             int count = 0;
             int total = audio_files.size();
-            const int BATCH_SIZE = 5; // Salva ogni 5 brani
+            const int BATCH_SIZE = 100; // Aumentato per ridurre overhead disco
             
             // Avvia la prima transazione
-            if (m_db) sqlite3_exec(m_db, "BEGIN TRANSACTION;", 0, 0, 0);
+            sqlite3_stmt* stmt_check = nullptr;
+            sqlite3_stmt* stmt_insert = nullptr;
+
+            if (m_db) {
+                LOG(DEBUG, "Starting database transaction for scan.");
+                sqlite3_exec(m_db, "BEGIN TRANSACTION;", 0, 0, 0);
+                // Prepara gli statement una sola volta fuori dal ciclo
+                sqlite3_prepare_v2(m_db, "SELECT 1 FROM music WHERE path = ? AND size_mb IS NOT NULL;", -1, &stmt_check, 0);
+                const char* sql_insert = "INSERT OR REPLACE INTO music (path, artist, title, album, year, genre, coverPath, bitrate, codec, samplerate, size_mb) "
+                                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
+                sqlite3_prepare_v2(m_db, sql_insert, -1, &stmt_insert, 0);
+            }
 
             for (const auto& file_path : audio_files) {
                 if (m_stop_scan) {
                     // Se interrotto, SALVA (COMMIT) quello che abbiamo fatto finora invece di buttare tutto
+                    LOG(INFO, "Scan interrupted by user. Committing current changes.");
+                    if (stmt_check) sqlite3_finalize(stmt_check);
+                    if (stmt_insert) sqlite3_finalize(stmt_insert);
                     if (m_db) sqlite3_exec(m_db, "COMMIT;", 0, 0, 0);
                     thread_cleanup("Scansione interrotta (Dati salvati).");
                     return;
@@ -2632,32 +3600,34 @@ public:
                 std::string filename = fs::path(file_path).filename();
                 double fraction = total > 0 ? (double)count / total : 0.0;
                 
-                Glib::signal_idle().connect([this, count, total, fraction]() {
-                    std::string text = std::to_string(count) + " / " + std::to_string(total);
-                    m_scan_progress_bar.set_fraction(fraction);
-                    m_scan_progress_bar.set_text(text);
-                    return false;
-                });
+                // Riduci la frequenza degli aggiornamenti UI per non bloccare l'interfaccia
+                if (count % 50 == 0 || count == total) {
+                    Glib::signal_idle().connect([this, count, total, fraction]() {
+                        std::string text = std::to_string(count) + " / " + std::to_string(total);
+                        m_scan_progress_bar.set_fraction(fraction);
+                        m_scan_progress_bar.set_text(text);
+                        return false;
+                    });
+                }
 
                 // Se il file è già nel DB, saltalo per velocizzare le ri-scansioni
                 bool exists_in_db = false;
-                if (m_db) {
-                    sqlite3_stmt* stmt;
-                    // Controlliamo se esiste E se ha i metadati popolati (size_mb non NULL).
-                    // Se size_mb è NULL, è un vecchio record che va aggiornato.
-                    const char* sql = "SELECT 1 FROM music WHERE path = ? AND size_mb IS NOT NULL;";
-                    if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, 0) == SQLITE_OK) {
-                        sqlite3_bind_text(stmt, 1, file_path.c_str(), -1, SQLITE_STATIC);
-                        if (sqlite3_step(stmt) == SQLITE_ROW) {
-                            exists_in_db = true;
-                        }
-                        sqlite3_finalize(stmt);
+                if (stmt_check) {
+                    sqlite3_reset(stmt_check);
+                    sqlite3_clear_bindings(stmt_check);
+                    sqlite3_bind_text(stmt_check, 1, file_path.c_str(), -1, SQLITE_STATIC);
+                    if (sqlite3_step(stmt_check) == SQLITE_ROW) {
+                        exists_in_db = true;
+                        LOG(DEBUG, "File already in DB and has metadata: " << file_path << ". Skipping.");
                     }
                 }
                 if (exists_in_db) continue;
 
                 std::string ext = fs::path(file_path).extension();
                 // USARE FILE TEMPORANEO SU DISCO (Più affidabile di RAM/Pipe)
+                // Using a rotating temp file name to avoid conflicts if previous cleanup failed
+                // and to potentially spread disk I/O if /tmp is on a slow device.
+                // The modulo 5 is arbitrary, just to cycle through a few names.
                 std::string temp_path = "/tmp/scan_temp_" + std::to_string(count % 5) + ext;
                 if (fs::exists(temp_path)) fs::remove(temp_path);
                 
@@ -2668,40 +3638,38 @@ public:
                     if (!meta.coverPath.empty() && fs::exists(meta.coverPath)) {
                         std::string cache_cover = get_hashed_path(file_path, ".jpg");
                         try {
+                            LOG(DEBUG, "Copying extracted cover from " << meta.coverPath << " to cache: " << cache_cover);
                             fs::copy_file(meta.coverPath, cache_cover, fs::copy_options::overwrite_existing);
                             meta.coverPath = cache_cover;
                         } catch(...) {}
-                        fs::remove(meta.coverPath); // Rimuovi cover temp
+                        if (fs::exists(meta.coverPath)) { // Check again in case copy failed
+                            fs::remove(meta.coverPath); // Rimuovi cover temp
+                            LOG(DEBUG, "Removed temporary cover file: " << meta.coverPath);
+                        }
                     }
                     fs::remove(temp_path); // Rimuovi audio temp
 
-                    if (m_db) {
-                        const char* sql_insert = "INSERT OR REPLACE INTO music (path, artist, title, album, year, genre, coverPath, bitrate, codec, samplerate, size_mb) "
-                                                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
-                        sqlite3_stmt* stmt_insert;
-                        if (sqlite3_prepare_v2(m_db, sql_insert, -1, &stmt_insert, 0) == SQLITE_OK) {
-                            sqlite3_bind_text(stmt_insert, 1, file_path.c_str(), -1, SQLITE_TRANSIENT);
-                            sqlite3_bind_text(stmt_insert, 2, meta.artist.c_str(), -1, SQLITE_TRANSIENT);
-                            sqlite3_bind_text(stmt_insert, 3, meta.title.c_str(), -1, SQLITE_TRANSIENT);
-                            sqlite3_bind_text(stmt_insert, 4, meta.album.c_str(), -1, SQLITE_TRANSIENT);
-                            sqlite3_bind_text(stmt_insert, 5, meta.year.c_str(), -1, SQLITE_TRANSIENT);
-                            sqlite3_bind_text(stmt_insert, 6, meta.genre.c_str(), -1, SQLITE_TRANSIENT);
-                            sqlite3_bind_text(stmt_insert, 7, meta.coverPath.c_str(), -1, SQLITE_TRANSIENT);
-                            sqlite3_bind_int(stmt_insert, 8, meta.bitrate);
-                            sqlite3_bind_text(stmt_insert, 9, meta.codec.c_str(), -1, SQLITE_TRANSIENT);
-                            sqlite3_bind_int(stmt_insert, 10, meta.samplerate);
-                            sqlite3_bind_double(stmt_insert, 11, meta.size_mb);
-                            
-                            if (sqlite3_step(stmt_insert) != SQLITE_DONE) {
-                                // Errore di inserimento silenziato per non mostrare nomi file nella shell.
-                            }
-                            sqlite3_finalize(stmt_insert);
-                        } else {
-                            LOG(ERROR, "Prepare insert failed: " << sqlite3_errmsg(m_db));
+                    if (stmt_insert) {
+                        sqlite3_reset(stmt_insert);
+                        sqlite3_clear_bindings(stmt_insert);
+                        sqlite3_bind_text(stmt_insert, 1, file_path.c_str(), -1, SQLITE_TRANSIENT);
+                        sqlite3_bind_text(stmt_insert, 2, sanitize_utf8(meta.artist).c_str(), -1, SQLITE_TRANSIENT);
+                        sqlite3_bind_text(stmt_insert, 3, sanitize_utf8(meta.title).c_str(), -1, SQLITE_TRANSIENT);
+                        sqlite3_bind_text(stmt_insert, 4, sanitize_utf8(meta.album).c_str(), -1, SQLITE_TRANSIENT);
+                        sqlite3_bind_text(stmt_insert, 5, sanitize_utf8(meta.year).c_str(), -1, SQLITE_TRANSIENT);
+                        sqlite3_bind_text(stmt_insert, 6, sanitize_utf8(meta.genre).c_str(), -1, SQLITE_TRANSIENT);
+                        sqlite3_bind_text(stmt_insert, 7, meta.coverPath.c_str(), -1, SQLITE_TRANSIENT);
+                        sqlite3_bind_int(stmt_insert, 8, meta.bitrate);
+                        sqlite3_bind_text(stmt_insert, 9, meta.codec.c_str(), -1, SQLITE_TRANSIENT);
+                        sqlite3_bind_int(stmt_insert, 10, meta.samplerate);
+                        sqlite3_bind_double(stmt_insert, 11, meta.size_mb);
+                        
+                        if (sqlite3_step(stmt_insert) != SQLITE_DONE) {
+                            LOG(ERROR, "Failed to insert/update DB for " << file_path << ": " << sqlite3_errmsg(m_db));
                         }
                     }
                 } else {
-                    LOG(ERROR, "Download fallito durante scansione: " << file_path);
+                    LOG(ERROR, "Download failed during scan for: " << file_path);
                 }
 
                 // Gestione salvataggio a blocchi (Batch Commit)
@@ -2709,18 +3677,16 @@ public:
                     if (m_db) {
                         // Chiudi transazione corrente (salva)
                         sqlite3_exec(m_db, "COMMIT;", 0, 0, 0);
+                        LOG(DEBUG, "Committed batch of " << BATCH_SIZE << " files.");
                         
-                        // Aggiorna la vista utente
-                        Glib::signal_idle().connect([this]() {
-                            if (m_db_view_active) load_db_view();
-                            return false;
-                        });
-
                         // Riapri nuova transazione
                         sqlite3_exec(m_db, "BEGIN TRANSACTION;", 0, 0, 0);
                     }
                 }
             }
+
+            if (stmt_check) sqlite3_finalize(stmt_check);
+            if (stmt_insert) sqlite3_finalize(stmt_insert);
 
             // Finalizza la transazione
             if (m_db) {
@@ -2734,19 +3700,23 @@ public:
 
     void find_audio_files_recursive(const std::string& path, std::vector<std::string>& audio_files) {
         if (m_stop_scan) return;
+        LOG(DEBUG, "Scanning directory: " << path);
 
-        // Aggiorna la barra di stato per mostrare che stiamo lavorando
-        Glib::signal_idle().connect([this, path, count = audio_files.size()]() {
-            if (m_scan_running) {
-                m_scan_progress_bar.set_text("Fase 1: Trovati " + std::to_string(count) + " brani...");
-            }
-            return false;
-        });
+        // Riduci frequenza aggiornamenti UI
+        if (audio_files.size() % 100 == 0) {
+            Glib::signal_idle().connect([this, path, count = audio_files.size()]() {
+                if (m_scan_running) {
+                    m_scan_progress_bar.set_text("Fase 1: Trovati " + std::to_string(count) + " brani...");
+                }
+                return false;
+            });
+        }
 
         std::string output = exec_smb(path, m_config);
         std::istringstream stream(output);
         std::string line;
         
+        // Check for SMB errors in the output before parsing lines
         while (std::getline(stream, line)) {
             if (m_stop_scan) return;
             std::string name;
@@ -2757,9 +3727,11 @@ public:
                 full_path += name;
 
                 if (is_folder) {
+                    LOG(DEBUG, "Found folder: " << full_path);
                     find_audio_files_recursive(full_path, audio_files);
                 } else {
                     std::string ext = fs::path(name).extension();
+                    if (!ext.empty() && ext[0] != '.') ext = "." + ext; // Ensure dot prefix
                     std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
                     if (ext == ".mp3" || ext == ".wav" || ext == ".flac" || ext == ".ogg" || ext == ".m4a") {
                         audio_files.push_back(full_path);
@@ -2769,53 +3741,42 @@ public:
         }
     }
 
-    void on_db_row_activated(const Gtk::TreeModel::Path& path, Gtk::TreeViewColumn* /*column*/) {
-        auto iter = m_db_model->get_iter(path);
-        if (!iter) return;
-        
-        Gtk::TreeModel::Row row = *iter;
-        Glib::ustring smb_path = row[m_columns.m_col_path];
-        
-        std::string name = fs::path((std::string)smb_path).filename();
-        set_title(name);
+    void update_db_labels(const std::string& path) {
+        std::string artist, title, album, year, genre;
+        bool found = false;
 
-        if (m_meta_cache.count((std::string)smb_path)) {
-            update_metadata_ui(m_meta_cache[(std::string)smb_path]);
-        } else {
-            m_entry_artist.set_text("");
-            m_entry_title.set_text("");
-            m_entry_album.set_text("");
-            m_entry_year.set_text("");
-            m_entry_genre.set_text("");
-            m_val_bitrate.set_text("");
-            m_val_codec.set_text("");
-            m_val_samplerate.set_text("");
-            m_val_size.set_text("");
-        }
-
-        std::string ext = fs::path(name).extension();
-        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-
-        if (ext == ".mp3" || ext == ".wav" || ext == ".flac" || ext == ".ogg" || ext == ".m4a") {
-            if (!m_pipeline) {
-                m_pipeline = gst_element_factory_make("playbin", "playbin");
-            } else {
-                gst_element_set_state(m_pipeline, GST_STATE_NULL);
-            }
-
-            if (m_pipeline) {
-                std::string local_path = "/tmp/current_track" + ext;
-                if (download_smb_file(smb_path, local_path, m_config)) {
-                    std::string uri = "file://" + local_path;
-                    g_object_set(m_pipeline, "uri", uri.c_str(), NULL);
-                    g_object_set(m_pipeline, "volume", m_volume_scale.get_value() / 100.0, NULL);
-                    gst_element_set_state(m_pipeline, GST_STATE_PLAYING);
-                    
-                    m_current_track_row = Gtk::TreeModel::RowReference();
-                    m_db_view.get_selection()->select(iter);
+        LOG(DEBUG, "Updating DB labels for path: " << path);
+        if (m_db) {
+            const char* sql = "SELECT artist, title, album, year, genre FROM music WHERE path = ?;";
+            sqlite3_stmt* stmt;
+            if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, 0) == SQLITE_OK) {
+                sqlite3_bind_text(stmt, 1, path.c_str(), -1, SQLITE_TRANSIENT);
+                if (sqlite3_step(stmt) == SQLITE_ROW) {
+                    auto get_text = [&](int col) {
+                        const unsigned char* t = sqlite3_column_text(stmt, col);
+                        return t ? std::string((const char*)t) : std::string("");
+                    };
+                    artist = get_text(0);
+                    title = get_text(1);
+                    album = get_text(2);
+                    year = get_text(3);
+                    genre = get_text(4);
+                    found = true;
                 }
+                else { LOG(DEBUG, "No DB entry found for path: " << path); }
+                sqlite3_finalize(stmt);
             }
         }
+        m_lbl_db_artist.set_text(found && !artist.empty() ? sanitize_utf8("(DB: " + artist + ")") : "");
+        m_lbl_db_title.set_text(found && !title.empty() ? sanitize_utf8("(DB: " + title + ")") : "");
+        m_lbl_db_album.set_text(found && !album.empty() ? sanitize_utf8("(DB: " + album + ")") : "");
+        m_lbl_db_year.set_text(found && !year.empty() ? sanitize_utf8("(DB: " + year + ")") : "");
+        m_lbl_db_genre.set_text(found && !genre.empty() ? sanitize_utf8("(DB: " + genre + ")") : "");
+    }
+
+    void on_db_row_activated(const Gtk::TreeModel::Path& path, Gtk::TreeViewColumn*) {
+        auto iter = m_db_model->get_iter(path);
+        if (iter) play_track(iter, m_db_model);
     }
 
     void on_db_sort_changed() {
@@ -2852,18 +3813,18 @@ public:
 protected:
     SambaConfig m_config;
     Gtk::Box m_box; 
-    Gtk::Button m_btnConfig, m_btnRefresh, m_btnExit, m_btnCast, m_btn_youtube, m_btnDB, m_btnScanDB, m_btnClearDB;
+    Gtk::Button m_btnConfig, m_btnRefresh, m_btnExit, m_btnCast, m_btn_youtube, m_btnDB, m_btnScanDB, m_btnClearDB, m_btn_save_db_only, m_btnIpod;
+    Gtk::ToggleButton m_btnDebugToggle;
+    Gtk::Box m_save_buttons_box;
     Gtk::Label m_scan_status_label;
     Gtk::ProgressBar m_scan_progress_bar;
+    Gtk::Paned m_middle_pane;
+    Gtk::ScrolledWindow m_ipod_scrolled_window;
+    Gtk::TreeView m_ipod_view;
+    Glib::RefPtr<Gtk::ListStore> m_ipod_model;
+    std::string m_current_ipod_path;
     sqlite3* m_db = nullptr;
     std::atomic<bool> m_stop_scan{false};
-    std::atomic<bool> m_scan_running{false};
-    std::thread m_scan_thread;
-    
-    // Device Discovery
-    DeviceColumns m_device_columns;
-    Glib::RefPtr<Gtk::ListStore> m_current_device_model;
-    GstDeviceMonitor *m_device_monitor = nullptr;
 
     static gboolean on_device_monitor_bus_msg_wrapper(GstBus *bus, GstMessage *msg, gpointer user_data) {
         return static_cast<PlayerWindow*>(user_data)->on_device_monitor_bus_msg(bus, msg);
@@ -2903,6 +3864,14 @@ protected:
         return TRUE;
     }
 
+    std::atomic<bool> m_scan_running{false};
+    std::thread m_scan_thread;
+    Glib::Dispatcher m_dispatcher_play, m_dispatcher_pause, m_dispatcher_stop, m_dispatcher_next;
+    std::thread m_midi_thread;
+    // Device Discovery
+    DeviceColumns m_device_columns;
+    Glib::RefPtr<Gtk::ListStore> m_current_device_model;
+    GstDeviceMonitor *m_device_monitor = nullptr;
     // Layout
     Gtk::Box m_top_bar, m_status_bar;
     Gtk::Paned m_main_pane;
@@ -2936,23 +3905,24 @@ protected:
     Gtk::Grid m_metadata_grid;
     Gtk::Label m_lbl_artist, m_lbl_title, m_lbl_album, m_lbl_year, m_lbl_genre;
     Gtk::Entry m_entry_artist, m_entry_title, m_entry_album, m_entry_year, m_entry_genre;
+    Gtk::Label m_lbl_db_artist, m_lbl_db_title, m_lbl_db_album, m_lbl_db_year, m_lbl_db_genre;
     Gtk::Button m_btn_save_metadata, m_btn_search_online, m_btn_recognize;
     Gtk::Button m_btn_save_cover;
     Gtk::Box m_btn_box;
     Gtk::Button m_btn_play, m_btn_pause, m_btn_stop;
     bool m_updating_scale = false;
     Gtk::TreeModel::RowReference m_current_track_row;
-    std::atomic<int> m_selection_gen;
-    std::map<std::string, Metadata> m_meta_cache;
     int m_search_index = 0;
     std::string m_last_query;
     Gtk::TreeView* m_context_view = nullptr;
-    std::atomic<int> m_folder_selection_gen;
     Gtk::TreeViewColumn* m_pColFile;
     Glib::ustring m_selected_db_path_before_sort;
 };
 
 int main(int argc, char *argv[]) {
+    // Silenzia il warning "Not loading module atk-bridge" se l'accessibilità non è richiesta
+    setenv("NO_AT_BRIDGE", "1", 1);
+
     LOG(INFO, "Starting application");
     gst_init(&argc, &argv);
     auto app = Gtk::Application::create(argc, argv, "org.example.musicplayer");

@@ -5,6 +5,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="$SCRIPT_DIR/venv"
 PYTHON_EXEC="python3"
 
+# Feedback immediato per la UI
+echo "STATUS: Verifica ambiente..."
+
 # 1. Controllo FFmpeg (essenziale per shazamio)
 if ! command -v ffmpeg &> /dev/null; then
     echo "Errore: FFmpeg non trovato. Installalo con: sudo apt install ffmpeg"
@@ -32,29 +35,43 @@ fi
 # 3. Installazione Dipendenze (se necessario)
 # Controlla se shazamio è importabile con l'interprete selezionato
 if ! "$PYTHON_EXEC" -c "import shazamio" &> /dev/null; then
-    echo "Installazione dipendenze in corso (potrebbe richiedere un attimo)..."
-    
+    echo "STATUS: Installazione librerie..."
+    INSTALL_LOG=$(mktemp)
     if [[ "$PYTHON_EXEC" == *"venv"* ]]; then
-        "$VENV_DIR/bin/pip" install shazamio &> /dev/null
+        # Python 3.13 workaround: installa audioop-lts e crea un shim per 'pyaudioop'
+        "$VENV_DIR/bin/pip" install shazamio audioop-lts > "$INSTALL_LOG" 2>&1
+        SP_DIR=$(find "$VENV_DIR/lib" -name "site-packages" -type d | head -n 1)
+        if [ -n "$SP_DIR" ]; then
+             echo "from audioop_lts import *" > "$SP_DIR/pyaudioop.py"
+        fi
     else
         # Tentativo su sistema (con break-system-packages per le nuove distro)
-        python3 -m pip install shazamio --break-system-packages &> /dev/null
+        python3 -m pip install shazamio audioop-lts --break-system-packages > "$INSTALL_LOG" 2>&1
     fi
     
     # Ricontrolla dopo installazione
     if ! "$PYTHON_EXEC" -c "import shazamio" &> /dev/null; then
-        echo "Errore: Impossibile installare 'shazamio'."
+        echo "Errore: Installazione completata ma importazione fallita."
+        echo "--- Dettagli Errore Python ---"
+        echo "--- Log di installazione (pip) ---"
+        cat "$INSTALL_LOG"
+        echo "--- Errore di importazione ---"
+        "$PYTHON_EXEC" -c "import shazamio" 2>&1
+        echo "------------------------------"
         if [[ "$PYTHON_EXEC" == *"venv"* ]]; then
-             echo "Verifica la connessione internet."
+             echo "Suggerimento: Prova a cancellare la cartella 'venv' con: rm -rf venv"
         else
              echo "Prova a installare manualmente: pip3 install shazamio --break-system-packages"
              echo "Oppure installa il modulo venv: sudo apt install python3-venv"
         fi
+        rm "$INSTALL_LOG"
         exit 1
     fi
+    rm "$INSTALL_LOG"
 fi
 
 # 4. Esecuzione Script Python
+echo "STATUS: Analisi audio..."
 $PYTHON_EXEC - "$1" <<EOF
 import sys
 import asyncio
